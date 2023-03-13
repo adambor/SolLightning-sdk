@@ -6,6 +6,11 @@ This project is intended to be used in web-browsers and browser-like environment
 
 **NOTE: This library is hardcoded to use bitcoin testnet3 and solana devnet, as it is still in alpha stage and is not safe to use for live systems. MAY contain bugs and uncovered edge-cases**
 
+## Installation
+```
+npm install sollightning-sdk
+```
+
 ## How to use?
 ### Initialization
 1. Get the wallet and connection

@@ -11,6 +11,11 @@ This project is intended to be used in web-browsers and browser-like environment
 npm install sollightning-sdk
 ```
 
+## Run the intermediary node
+Is the node handling the Bitcoin <-> Solana cross-chain swaps. Implementation [here](https://github.com/adambor/SolLightning-Intermediary)
+
+For now this SDK needs to configured as to which intermediary node to use. In the future there should be a registry containing all the nodes (with their reputation and swap fees) so client SDK can choose the desired node itself automatically, or try sending the swap request to multiple nodes, should one of them fail or not have enough liquidity.
+
 ## How to use?
 ### Initialization
 1. Get the wallet and connection
@@ -31,7 +36,7 @@ npm install sollightning-sdk
     //Create anchor provider
     const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
     //Create the swapper instance
-    const swapper = new Swapper(anchorProvider, _urlOfIntermediary); //Where URL is the address of the intermediary handling the swaps
+    const swapper = new Swapper(anchorProvider, _urlOfIntermediary); //URL of the running intermediary node instance
     //Initialize the swapper
     await swapper.init();
     ```

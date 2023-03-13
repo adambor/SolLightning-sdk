@@ -88,7 +88,7 @@ const amountToBeReceivedOnSolana = swap.getOutAmount();
 const fee = swap.getFee();
 //Wait for the payment to arrive
 await swap.waitForPayment();
-//Pay for the swap
+//Claim the swap funds
 await swap.commitAndClaim(anchorProvider);
 ```
 
@@ -105,6 +105,6 @@ const amountToBeReceivedOnSolana = swap.getOutAmount();
 const fee = swap.getFee();
 //Wait for the payment to arrive
 await swap.waitForPayment();
-//Pay for the swap
+//Claim the swap funds
 await swap.commitAndClaim(anchorProvider);
 ```

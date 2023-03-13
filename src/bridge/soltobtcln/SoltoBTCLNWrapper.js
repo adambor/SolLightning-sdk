@@ -1,0 +1,235 @@
+import * as bolt11 from "bolt11";
+import * as EventEmitter from "events";
+import SoltoBTCLN, { PaymentRequestStatus } from "./SoltoBTCLN";
+import { BN } from "@project-serum/anchor";
+import { SoltoBTCLNSwap } from "./SoltoBTCLNSwap";
+import { ConstantSoltoBTCLN } from "../../Constants";
+export const SoltoBTCLNSwapState = {
+    REFUNDED: -2,
+    FAILED: -1,
+    CREATED: 0,
+    COMMITED: 1,
+    CLAIMED: 2,
+    REFUNDABLE: 3
+};
+class SoltoBTCLNWrapper {
+    /**
+     * @param storage   Storage interface for the current environment
+     * @param provider  AnchorProvider used for RPC and signing
+     */
+    constructor(storage, provider) {
+        this.isInitialized = false;
+        this.eventListeners = [];
+        this.storage = storage;
+        this.provider = provider;
+        this.contract = new SoltoBTCLN(provider);
+        this.events = new EventEmitter();
+    }
+    /**
+     * Returns the WBTC token balance of the wallet
+     */
+    getWBTCBalance() {
+        return this.contract.getBalance(this.provider.wallet.publicKey);
+    }
+    static calculateFeeForAmount(amount) {
+        return ConstantSoltoBTCLN.baseFee.add(amount.mul(ConstantSoltoBTCLN.fee).div(new BN(1000000)));
+    }
+    /**
+     * Returns a newly created swap, paying for 'bolt11PayRequest' - a bitcoin LN invoice
+     *
+     * @param bolt11PayRequest  BOLT11 payment request (bitcoin lightning invoice) you wish to pay
+     * @param expirySeconds     Swap expiration in seconds, setting this too low might lead to unsuccessful payments, too high and you might lose access to your funds for longer than necessary
+     * @param url               Intermediary/Counterparty swap service url
+     */
+    async create(bolt11PayRequest, expirySeconds, url) {
+        if (!this.isInitialized)
+            throw new Error("Not initialized, call init() first!");
+        const parsedPR = bolt11.decode(bolt11PayRequest);
+        if (parsedPR.satoshis == null) {
+            throw new Error("Must be an invoice with amount!");
+        }
+        const sats = new BN(parsedPR.millisatoshis).div(new BN(1000));
+        const fee = SoltoBTCLNWrapper.calculateFeeForAmount(sats);
+        const result = await this.contract.payBOLT11PaymentRequest(bolt11PayRequest, expirySeconds, fee, url);
+        const swap = new SoltoBTCLNSwap(this, bolt11PayRequest, result.data, url, this.provider.wallet.publicKey, result.confidence);
+        await swap.save();
+        this.swapData[result.data.paymentHash] = swap;
+        return swap;
+    }
+    /**
+     * Initializes the wrapper, be sure to call this before taking any other actions.
+     * Checks if any swaps are already refundable
+     */
+    async init() {
+        if (this.isInitialized)
+            return;
+        let eventQueue = [];
+        this.swapData = await this.storage.loadSwapData(this);
+        const processEvent = (event, slotNumber, signature) => {
+            const paymentHash = Buffer.from(event.data.hash).toString("hex");
+            console.log("Event payment hash: ", paymentHash);
+            console.log("Swap data array: ", this.swapData);
+            const swap = this.swapData[paymentHash];
+            console.log("Swap found: ", swap);
+            if (swap == null)
+                return;
+            let swapChanged = false;
+            if (event.name === "InitializeEvent") {
+                if (swap.state === SoltoBTCLNSwapState.CREATED) {
+                    swap.state = SoltoBTCLNSwapState.COMMITED;
+                    swapChanged = true;
+                }
+            }
+            if (event.name === "ClaimEvent") {
+                if (swap.state === SoltoBTCLNSwapState.CREATED || swap.state === SoltoBTCLNSwapState.COMMITED || swap.state === SoltoBTCLNSwapState.REFUNDABLE) {
+                    swap.state = SoltoBTCLNSwapState.CLAIMED;
+                    swapChanged = true;
+                }
+            }
+            if (event.name === "RefundEvent") {
+                if (swap.state === SoltoBTCLNSwapState.CREATED || swap.state === SoltoBTCLNSwapState.COMMITED || swap.state === SoltoBTCLNSwapState.REFUNDABLE) {
+                    swap.state = SoltoBTCLNSwapState.REFUNDED;
+                    swapChanged = true;
+                }
+            }
+            if (swapChanged) {
+                if (eventQueue == null) {
+                    swap.save().then(() => {
+                        swap.emitEvent();
+                    });
+                }
+            }
+        };
+        const listener = (event, slotNumber, signature) => {
+            console.log("EVENT: ", event);
+            if (eventQueue != null) {
+                eventQueue.push({ event, slotNumber, signature });
+                return;
+            }
+            processEvent(event, slotNumber, signature);
+        };
+        this.eventListeners.push(this.contract.program.addEventListener("InitializeEvent", (event, slotNumber, signature) => listener({
+            name: "InitializeEvent",
+            data: event
+        }, slotNumber, signature)));
+        this.eventListeners.push(this.contract.program.addEventListener("ClaimEvent", (event, slotNumber, signature) => listener({
+            name: "ClaimEvent",
+            data: event
+        }, slotNumber, signature)));
+        this.eventListeners.push(this.contract.program.addEventListener("RefundEvent", (event, slotNumber, signature) => listener({
+            name: "RefundEvent",
+            data: event
+        }, slotNumber, signature)));
+        const changedSwaps = {};
+        for (let paymentHash in this.swapData) {
+            const swap = this.swapData[paymentHash];
+            if (swap.state === SoltoBTCLNSwapState.CREATED) {
+                //Check if it's already committed
+                const res = await this.contract.getCommitStatus(swap.fromAddress, swap.data);
+                if (res === PaymentRequestStatus.PAID) {
+                    swap.state = SoltoBTCLNSwapState.CLAIMED;
+                    changedSwaps[paymentHash] = swap;
+                }
+                if (res === PaymentRequestStatus.EXPIRED) {
+                    swap.state = SoltoBTCLNSwapState.FAILED;
+                    changedSwaps[paymentHash] = swap;
+                }
+                if (res === PaymentRequestStatus.PAYING) {
+                    swap.state = SoltoBTCLNSwapState.COMMITED;
+                    changedSwaps[paymentHash] = swap;
+                }
+                if (res === PaymentRequestStatus.REFUNDABLE) {
+                    swap.state = SoltoBTCLNSwapState.REFUNDABLE;
+                    changedSwaps[paymentHash] = swap;
+                }
+            }
+            if (swap.state === SoltoBTCLNSwapState.COMMITED) {
+                const res = await this.contract.getCommitStatus(swap.fromAddress, swap.data);
+                if (res === PaymentRequestStatus.PAYING) {
+                    //Check if that maybe already concluded
+                    const refundAuth = await this.contract.getRefundAuthorization(swap.fromAddress, swap.data, swap.url);
+                    if (refundAuth != null) {
+                        if (!refundAuth.is_paid) {
+                            swap.state = SoltoBTCLNSwapState.REFUNDABLE;
+                            changedSwaps[paymentHash] = swap;
+                        }
+                        else {
+                            //TODO: Perform check on secret
+                            swap.secret = refundAuth.secret;
+                        }
+                    }
+                }
+                if (res === PaymentRequestStatus.NOT_FOUND) {
+                    swap.state = SoltoBTCLNSwapState.REFUNDED;
+                    changedSwaps[paymentHash] = swap;
+                }
+                if (res === PaymentRequestStatus.PAID) {
+                    swap.state = SoltoBTCLNSwapState.CLAIMED;
+                    changedSwaps[paymentHash] = swap;
+                }
+                if (res === PaymentRequestStatus.EXPIRED) {
+                    swap.state = SoltoBTCLNSwapState.FAILED;
+                    changedSwaps[paymentHash] = swap;
+                }
+                if (res === PaymentRequestStatus.REFUNDABLE) {
+                    swap.state = SoltoBTCLNSwapState.REFUNDABLE;
+                    changedSwaps[paymentHash] = swap;
+                }
+            }
+        }
+        for (let { event, slotNumber, signature } of eventQueue) {
+            processEvent(event, slotNumber, signature);
+        }
+        eventQueue = null;
+        await this.storage.saveSwapDataArr(Object.keys(changedSwaps).map(e => changedSwaps[e]));
+        this.isInitialized = true;
+    }
+    /**
+     * Un-subscribes from event listeners on Solana
+     */
+    async stop() {
+        this.swapData = null;
+        for (let num of this.eventListeners) {
+            await this.contract.program.removeEventListener(num);
+        }
+        this.eventListeners = [];
+        this.isInitialized = false;
+    }
+    /**
+     * Returns swaps that are refundable and that were initiated with the current provider's public key
+     */
+    async getRefundableSwaps() {
+        if (!this.isInitialized)
+            throw new Error("Not initialized, call init() first!");
+        const returnArr = [];
+        for (let paymentHash in this.swapData) {
+            const swap = this.swapData[paymentHash];
+            console.log(swap);
+            if (!swap.fromAddress.equals(this.provider.wallet.publicKey)) {
+                continue;
+            }
+            if (swap.state === SoltoBTCLNSwapState.REFUNDABLE) {
+                returnArr.push(swap);
+            }
+        }
+        return returnArr;
+    }
+    /**
+     * Returns all swaps that were initiated with the current provider's public key
+     */
+    async getAllSwaps() {
+        if (!this.isInitialized)
+            throw new Error("Not initialized, call init() first!");
+        const returnArr = [];
+        for (let paymentHash in this.swapData) {
+            const swap = this.swapData[paymentHash];
+            console.log(swap);
+            if (!swap.fromAddress.equals(this.provider.wallet.publicKey)) {
+                continue;
+            }
+            returnArr.push(swap);
+        }
+        return returnArr;
+    }
+}
+export default SoltoBTCLNWrapper;

@@ -9,6 +9,7 @@ import BigNumber from "bignumber.js";
 import {ConstantBTCLNtoSol} from "../../Constants";
 import IBTCxtoSolWrapper from "../IBTCxtoSolWrapper";
 import IWrapperStorage from "../IWrapperStorage";
+import {PublicKey} from "@solana/web3.js";
 
 export const BTCLNtoSolSwapState = {
     FAILED: -1,
@@ -41,11 +42,12 @@ class BTCLNtoSolWrapper implements IBTCxtoSolWrapper{
     /**
      * @param storage   Storage interface for the current environment
      * @param provider  AnchorProvider used for RPC and signing
+     * @param wbtcToken WBTC SPL token address
      */
-    constructor(storage: IWrapperStorage, provider: AnchorProvider) {
+    constructor(storage: IWrapperStorage, provider: AnchorProvider, wbtcToken: PublicKey) {
         this.storage = storage;
         this.provider = provider;
-        this.contract = new BTCLNtoSol(provider);
+        this.contract = new BTCLNtoSol(provider, wbtcToken);
         this.events = new EventEmitter();
     }
 

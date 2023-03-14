@@ -394,15 +394,15 @@ export default class BTCtoSolSwap implements IBTCxtoSolSwap {
      */
     async commitAndClaim(signer: AnchorProvider, abortSignal?: AbortSignal): Promise<TransactionSignature[]> {
 
-        if(this.state!==BTCtoSolSwapState.PR_PAID) {
-            throw new Error("Must be in PR_PAID state!");
-        }
-
         if(this.state===BTCtoSolSwapState.CLAIM_COMMITED) {
             return [
                 null,
                 await this.claim(signer, false, abortSignal)
             ];
+        }
+
+        if(this.state!==BTCtoSolSwapState.PR_PAID) {
+            throw new Error("Must be in PR_PAID state!");
         }
 
         try {

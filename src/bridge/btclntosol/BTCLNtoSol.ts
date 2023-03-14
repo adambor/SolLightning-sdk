@@ -30,7 +30,6 @@ const timeoutPromise = (timeoutSeconds) => {
 };
 
 const MIN_TIME_TO_CONFIRM = ConstantBTCLNtoSol.claimGracePeriod;
-const WBTC_ADDRESS = Bitcoin.wbtcToken;
 
 const STATE_SEED = "state";
 const VAULT_SEED = "vault";
@@ -78,27 +77,29 @@ export const BTCLNtoEVMCommitStatus = {
 
 class BTCLNtoSol {
 
+    WBTC_ADDRESS: PublicKey;
     provider: AnchorProvider;
     program: Program;
     vaultAuthorityKey: PublicKey;
     vaultKey: PublicKey;
 
-    constructor(provider: AnchorProvider) {
+    constructor(provider: AnchorProvider, wbtcToken: PublicKey) {
         this.provider = provider;
+        this.WBTC_ADDRESS = wbtcToken;
         this.program = new Program(programIdl, programIdl.metadata.address, this.provider);
         this.vaultAuthorityKey = PublicKey.findProgramAddressSync(
             [Buffer.from(AUTHORITY_SEED)],
             this.program.programId
         )[0];
         this.vaultKey = PublicKey.findProgramAddressSync(
-            [Buffer.from(VAULT_SEED), WBTC_ADDRESS.toBuffer()],
+            [Buffer.from(VAULT_SEED), this.WBTC_ADDRESS.toBuffer()],
             this.program.programId
         )[0];
     }
 
     getUserVaultKey(wallet: PublicKey) {
         return PublicKey.findProgramAddressSync(
-            [Buffer.from(USER_VAULT_SEED), wallet.toBuffer(), WBTC_ADDRESS.toBuffer()],
+            [Buffer.from(USER_VAULT_SEED), wallet.toBuffer(), this.WBTC_ADDRESS.toBuffer()],
             this.program.programId
         )[0];
     }
@@ -476,7 +477,7 @@ class BTCLNtoSol {
 
             const tokenAddress = data.token;
 
-            if (!tokenAddress.equals(WBTC_ADDRESS)) {
+            if (!tokenAddress.equals(this.WBTC_ADDRESS)) {
                 console.error("[EVM.PaymentRequest] Invalid token used");
                 throw new PaymentAuthError("Invalid token used");
             }
@@ -748,7 +749,7 @@ class BTCLNtoSol {
                 initializer: data.intermediary,
                 offerer: intermediary,
                 claimer: data.intermediary,
-                mint: WBTC_ADDRESS,
+                mint: this.WBTC_ADDRESS,
                 userData: this.getUserVaultKey(intermediary),
                 escrowState: this.getEscrowStateKey(paymentHash),
                 systemProgram: SystemProgram.programId,
@@ -792,7 +793,7 @@ class BTCLNtoSol {
             throw new Error("Not enough time to reliably pay the invoice");
         }
 
-        const ata = getAssociatedTokenAddressSync(WBTC_ADDRESS, data.intermediary);
+        const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, data.intermediary);
 
         const claimIx = await this.program.methods
             .claimerClaimPayOut(secret)
@@ -816,14 +817,14 @@ class BTCLNtoSol {
     async createClaimTx(intermediary: PublicKey, data: AtomicSwapStruct, secret: Buffer): Promise<Transaction> {
         const claimIx = await this.createClaimIx(intermediary, data, secret);
 
-        const ata = getAssociatedTokenAddressSync(WBTC_ADDRESS, data.intermediary);
+        const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, data.intermediary);
 
         const tx = new Transaction();
         tx.add(claimIx);
         try {
             const fetched = await getAccount(this.provider.connection, ata);
         } catch (e) {
-            const initATAix = createInitializeAccountInstruction(ata, WBTC_ADDRESS, data.intermediary);
+            const initATAix = createInitializeAccountInstruction(ata, this.WBTC_ADDRESS, data.intermediary);
             tx.add(initATAix);
         }
 

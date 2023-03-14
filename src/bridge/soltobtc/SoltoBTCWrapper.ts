@@ -41,11 +41,12 @@ class SoltoBTCWrapper implements ISolToBTCxWrapper {
     /**
      * @param storage   Storage interface for the current environment
      * @param provider  AnchorProvider used for RPC and signing
+     * @param wbtcToken WBTC SPL token address
      */
-    constructor(storage: IWrapperStorage, provider: AnchorProvider) {
+    constructor(storage: IWrapperStorage, provider: AnchorProvider, wbtcToken: PublicKey) {
         this.storage = storage;
         this.provider = provider;
-        this.contract = new SoltoBTC(provider);
+        this.contract = new SoltoBTC(provider, wbtcToken);
         this.events = new EventEmitter();
     }
 

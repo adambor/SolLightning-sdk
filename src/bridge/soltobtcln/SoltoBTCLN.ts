@@ -41,8 +41,6 @@ export const PaymentRequestStatus = {
     REFUNDABLE: 4
 };
 
-const WBTC_ADDRESS = Bitcoin.wbtcToken;
-
 const STATE_SEED = "state";
 const VAULT_SEED = "vault";
 const USER_VAULT_SEED = "uservault";
@@ -60,27 +58,29 @@ class SoltoBTCLN {
         ];
     }
 
+    WBTC_ADDRESS: PublicKey;
     provider: AnchorProvider;
     program: Program;
     vaultAuthorityKey: PublicKey;
     vaultKey: PublicKey;
 
-    constructor(provider: AnchorProvider) {
+    constructor(provider: AnchorProvider, wbtcToken: PublicKey) {
         this.provider = provider;
+        this.WBTC_ADDRESS = wbtcToken;
         this.program = new Program(programIdl, programIdl.metadata.address, this.provider);
         this.vaultAuthorityKey = PublicKey.findProgramAddressSync(
             [Buffer.from(AUTHORITY_SEED)],
             this.program.programId
         )[0];
         this.vaultKey = PublicKey.findProgramAddressSync(
-            [Buffer.from(VAULT_SEED), WBTC_ADDRESS.toBuffer()],
+            [Buffer.from(VAULT_SEED), this.WBTC_ADDRESS.toBuffer()],
             this.program.programId
         )[0];
     }
 
     getUserVaultKey(wallet: PublicKey) {
         return PublicKey.findProgramAddressSync(
-            [Buffer.from(USER_VAULT_SEED), wallet.toBuffer(), WBTC_ADDRESS.toBuffer()],
+            [Buffer.from(USER_VAULT_SEED), wallet.toBuffer(), this.WBTC_ADDRESS.toBuffer()],
             this.program.programId
         )[0];
     }
@@ -94,7 +94,7 @@ class SoltoBTCLN {
     }
 
     async getBalance(address: PublicKey): Promise<BN> {
-        const ata = getAssociatedTokenAddressSync(WBTC_ADDRESS, address);
+        const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
 
         try {
             const account = await getAccount(this.provider.connection, ata);
@@ -374,7 +374,7 @@ class SoltoBTCLN {
             nonce,
             data: {
                 intermediary: new PublicKey(jsonBody.data.address),
-                token: WBTC_ADDRESS,
+                token: this.WBTC_ADDRESS,
                 amount: total,
                 paymentHash: hash,
                 expiry: expiryTimestamp
@@ -392,7 +392,7 @@ class SoltoBTCLN {
 
         const paymentHash = Buffer.from(data.paymentHash, "hex");
 
-        const ata = getAssociatedTokenAddressSync(WBTC_ADDRESS, address);
+        const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
 
         console.log("Authority key: ", this.vaultAuthorityKey);
 
@@ -405,7 +405,7 @@ class SoltoBTCLN {
                 escrowState: this.getEscrowStateKey(paymentHash),
                 vault: this.vaultKey,
                 vaultAuthority: this.vaultAuthorityKey,
-                mint: WBTC_ADDRESS,
+                mint: this.WBTC_ADDRESS,
                 systemProgram: SystemProgram.programId,
                 rent: SYSVAR_RENT_PUBKEY,
                 tokenProgram: TOKEN_PROGRAM_ID
@@ -476,7 +476,7 @@ class SoltoBTCLN {
             swapFee: swapFee,
             data: {
                 intermediary: new PublicKey(jsonBody.data.address),
-                token: WBTC_ADDRESS,
+                token: this.WBTC_ADDRESS,
                 amount: sats.add(maxFee).add(swapFee),
                 paymentHash: parsedPR.tagsObject.payment_hash,
                 expiry: new BN(expiryTimestamp)
@@ -494,7 +494,7 @@ class SoltoBTCLN {
 
         const paymentHash = Buffer.from(data.paymentHash, "hex");
 
-        const ata = getAssociatedTokenAddressSync(WBTC_ADDRESS, address);
+        const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
 
         const ix = await this.program.methods
             .offererInitializePayIn(data.amount, data.expiry, paymentHash, new BN(0), new BN(0), new BN(0))
@@ -505,7 +505,7 @@ class SoltoBTCLN {
                 escrowState: this.getEscrowStateKey(paymentHash),
                 vault: this.vaultKey,
                 vaultAuthority: this.vaultAuthorityKey,
-                mint: WBTC_ADDRESS,
+                mint: this.WBTC_ADDRESS,
                 systemProgram: SystemProgram.programId,
                 rent: SYSVAR_RENT_PUBKEY,
                 tokenProgram: TOKEN_PROGRAM_ID
@@ -652,7 +652,7 @@ class SoltoBTCLN {
             }
         }
 
-        const ata = getAssociatedTokenAddressSync(WBTC_ADDRESS, address);
+        const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
 
         const ix = await this.program.methods
             .offererRefundPayOut()
@@ -687,7 +687,7 @@ class SoltoBTCLN {
         const paymentHash = Buffer.from(data.paymentHash, "hex");
         const signatureBuffer = Buffer.from(signature, "hex");
 
-        const ata = getAssociatedTokenAddressSync(WBTC_ADDRESS, address);
+        const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
 
         let result = await this.program.methods
             .offererRefundWithSignaturePayOut(new BN(timeout), signatureBuffer)

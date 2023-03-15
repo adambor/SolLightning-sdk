@@ -13,7 +13,7 @@ import {
 import {AnchorProvider, BN, Program} from "@project-serum/anchor";
 import {programIdl} from "../contracts/programIdl";
 import {sign} from "tweetnacl";
-import {TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, getAccount, createInitializeAccountInstruction} from "@solana/spl-token";
+import {TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, getAccount, createAssociatedTokenAccountInstruction} from "@solana/spl-token";
 import Utils from "../../Utils";
 import {Bitcoin, ConstantBTCLNtoSol, ConstantBTCtoSol} from "../../Constants";
 import * as ecc from 'tiny-secp256k1';
@@ -823,7 +823,12 @@ class BTCLNtoSol {
         try {
             const fetched = await getAccount(this.provider.connection, ata);
         } catch (e) {
-            const initATAix = createInitializeAccountInstruction(ata, this.WBTC_ADDRESS, data.intermediary);
+            const initATAix = createAssociatedTokenAccountInstruction(
+                data.intermediary,
+                ata,
+                data.intermediary,
+                this.WBTC_ADDRESS
+            );
             tx.add(initATAix);
         }
         tx.add(claimIx);

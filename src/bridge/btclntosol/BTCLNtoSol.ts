@@ -820,13 +820,13 @@ class BTCLNtoSol {
         const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, data.intermediary);
 
         const tx = new Transaction();
-        tx.add(claimIx);
         try {
             const fetched = await getAccount(this.provider.connection, ata);
         } catch (e) {
             const initATAix = createInitializeAccountInstruction(ata, this.WBTC_ADDRESS, data.intermediary);
             tx.add(initATAix);
         }
+        tx.add(claimIx);
 
         return tx;
     }

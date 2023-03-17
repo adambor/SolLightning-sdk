@@ -36,7 +36,7 @@ For now this SDK needs to configured as to which intermediary node to use. In th
     //Create anchor provider
     const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
     //Create the swapper instance
-    const swapper = new Swapper(anchorProvider, _urlOfIntermediary); //URL of the running intermediary node instance
+    const swapper = new Swapper(anchorProvider, _urlOfIntermediary, null, _wbtcTokenPubkey); //URL of the running intermediary node instance, and token mint pubkey (address) of the WBTC token minted on devnet (see intermediary node's instructions)
     //Initialize the swapper
     await swapper.init();
     ```
@@ -91,16 +91,22 @@ const qrCodeData = swap.getQrData(); //Data that can be displayed in the form of
 //Get the amount we will receive on Solana
 const amountToBeReceivedOnSolana = swap.getOutAmount();
 const fee = swap.getFee();
-//Wait for the payment to arrive
-await swap.waitForPayment();
-//Claim the swap funds
-await swap.commitAndClaim(anchorProvider);
+try {
+    //Wait for the payment to arrive
+    await swap.waitForPayment(null, null, (txId: string, confirmations: number, targetConfirmations: number, amount: BN, totalFee: BN, received: BN) => {
+        //Updates about the swap state, txId, current confirmations of the transaction, required target confirmations, amount of the transaction received, updated totalFee (as on-chain fees may change), and resulting amount of token received.
+    });
+    //Claim the swap funds
+    await swap.commitAndClaim(anchorProvider);
+} catch(e) {
+    //Error occurred while waiting for payment
+}
 ```
 
 ### Swap BTCLN -> Solana
 ```javascript
 //Create the swap
-const swap = await swapper.createBTCtoSolSwap(_amount);
+const swap = await swapper.createBTCLNtoSolSwap(_amount);
 //Get the bitcoin lightning network invoice (the invoice contains pre-entered amount)
 const receivingLightningInvoice = swap.getAddress();
 //Get the QR code (contains the lightning network invoice)
@@ -108,8 +114,39 @@ const qrCodeData = swap.getQrData(); //Data that can be displayed in the form of
 //Get the amount we will receive on Solana
 const amountToBeReceivedOnSolana = swap.getOutAmount();
 const fee = swap.getFee();
-//Wait for the payment to arrive
-await swap.waitForPayment();
-//Claim the swap funds
-await swap.commitAndClaim(anchorProvider);
+try {
+    //Wait for the payment to arrive
+    await swap.waitForPayment();
+    //Claim the swap funds
+    await swap.commitAndClaim(anchorProvider);
+} catch(e) {
+    //Error occurred while waiting for payment
+}
+```
+
+### Get refundable swaps
+You can refund the swaps in one of two cases:
+* In case intermediary is non-cooperative and goes offline, you can claim the funds from the swap contract back after some time.
+* In case intermediary tried to pay but was unsuccessful, so he sent you signed message with which you can refund now without waiting.
+
+This call can be checked on every startup and periodically every few minutes.
+```javascript
+//Get the swaps
+const refundableSwaps = await swapper.getRefundableSwaps();
+//Refund all the swaps
+for(let swap of refundableSwaps) {
+    await swap.refund(anchorProvider);
+}
+```
+
+### Get claimable swaps
+Returns swaps that are ready to be claimed by the client, this can happen if client closes the application when a swap is in-progress and the swap is concluded while the client is offline.
+
+```javascript
+//Get the swaps
+const claimableSwaps = await swapper.getClaimableSwaps();
+//Claim all the claimable swaps
+for(let swap of claimableSwaps) {
+    await swap.commitAndClaim(anchorProvider);
+}
 ```

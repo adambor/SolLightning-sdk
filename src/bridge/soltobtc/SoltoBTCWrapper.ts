@@ -8,15 +8,7 @@ import SoltoBTCSwap from "./SoltoBTCSwap";
 import {ConstantSoltoBTC} from "../../Constants";
 import ISolToBTCxWrapper from "../ISolToBTCxWrapper";
 import IWrapperStorage from "../IWrapperStorage";
-
-export const SoltoBTCSwapState = {
-    REFUNDED: -2,
-    FAILED: -1,
-    CREATED: 0,
-    COMMITED: 1,
-    CLAIMED: 2,
-    REFUNDABLE: 3
-};
+import {SolToBTCxSwapState} from "../ISolToBTCxSwap";
 
 class SoltoBTCWrapper implements ISolToBTCxWrapper {
 
@@ -122,20 +114,20 @@ class SoltoBTCWrapper implements ISolToBTCxWrapper {
 
             let swapChanged = false;
             if(event.name==="InitializeEvent") {
-                if(swap.state===SoltoBTCSwapState.CREATED) {
-                    swap.state = SoltoBTCSwapState.COMMITED;
+                if(swap.state===SolToBTCxSwapState.CREATED) {
+                    swap.state = SolToBTCxSwapState.COMMITED;
                     swapChanged = true;
                 }
             }
             if(event.name==="ClaimEvent") {
-                if(swap.state===SoltoBTCSwapState.CREATED || swap.state===SoltoBTCSwapState.COMMITED || swap.state===SoltoBTCSwapState.REFUNDABLE) {
-                    swap.state = SoltoBTCSwapState.CLAIMED;
+                if(swap.state===SolToBTCxSwapState.CREATED || swap.state===SolToBTCxSwapState.COMMITED || swap.state===SolToBTCxSwapState.REFUNDABLE) {
+                    swap.state = SolToBTCxSwapState.CLAIMED;
                     swapChanged = true;
                 }
             }
             if(event.name==="RefundEvent") {
-                if(swap.state===SoltoBTCSwapState.CREATED || swap.state===SoltoBTCSwapState.COMMITED || swap.state===SoltoBTCSwapState.REFUNDABLE) {
-                    swap.state = SoltoBTCSwapState.REFUNDED;
+                if(swap.state===SolToBTCxSwapState.CREATED || swap.state===SolToBTCxSwapState.COMMITED || swap.state===SolToBTCxSwapState.REFUNDABLE) {
+                    swap.state = SolToBTCxSwapState.REFUNDED;
                     swapChanged = true;
                 }
             }
@@ -179,35 +171,35 @@ class SoltoBTCWrapper implements ISolToBTCxWrapper {
         for(let paymentHash in this.swapData) {
             const swap = this.swapData[paymentHash];
 
-            if(swap.state===SoltoBTCSwapState.CREATED) {
+            if(swap.state===SolToBTCxSwapState.CREATED) {
                 //Check if it's already committed
                 const res = await this.contract.getCommitStatus(swap.fromAddress, swap.data);
                 if(res===PaymentRequestStatus.PAID) {
-                    swap.state = SoltoBTCSwapState.CLAIMED;
+                    swap.state = SolToBTCxSwapState.CLAIMED;
                     changedSwaps[paymentHash] = swap;
                 }
                 if(res===PaymentRequestStatus.EXPIRED) {
-                    swap.state = SoltoBTCSwapState.FAILED;
+                    swap.state = SolToBTCxSwapState.FAILED;
                     changedSwaps[paymentHash] = swap;
                 }
                 if(res===PaymentRequestStatus.PAYING) {
-                    swap.state = SoltoBTCSwapState.COMMITED;
+                    swap.state = SolToBTCxSwapState.COMMITED;
                     changedSwaps[paymentHash] = swap;
                 }
                 if(res===PaymentRequestStatus.REFUNDABLE) {
-                    swap.state = SoltoBTCSwapState.REFUNDABLE;
+                    swap.state = SolToBTCxSwapState.REFUNDABLE;
                     changedSwaps[paymentHash] = swap;
                 }
             }
 
-            if(swap.state===SoltoBTCSwapState.COMMITED) {
+            if(swap.state===SolToBTCxSwapState.COMMITED) {
                 const res = await this.contract.getCommitStatus(swap.fromAddress, swap.data);
                 if(res===PaymentRequestStatus.PAYING) {
                     //Check if that maybe already concluded
                     const refundAuth = await this.contract.getRefundAuthorization(swap.fromAddress, swap.data, swap.url, swap.nonce);
                     if(refundAuth!=null) {
                         if(!refundAuth.is_paid) {
-                            swap.state = SoltoBTCSwapState.REFUNDABLE;
+                            swap.state = SolToBTCxSwapState.REFUNDABLE;
                             changedSwaps[paymentHash] = swap;
                         } else {
                             //TODO: Perform check on txId
@@ -216,19 +208,19 @@ class SoltoBTCWrapper implements ISolToBTCxWrapper {
                     }
                 }
                 if(res===PaymentRequestStatus.NOT_FOUND) {
-                    swap.state = SoltoBTCSwapState.REFUNDED;
+                    swap.state = SolToBTCxSwapState.REFUNDED;
                     changedSwaps[paymentHash] = swap;
                 }
                 if(res===PaymentRequestStatus.PAID) {
-                    swap.state = SoltoBTCSwapState.CLAIMED;
+                    swap.state = SolToBTCxSwapState.CLAIMED;
                     changedSwaps[paymentHash] = swap;
                 }
                 if(res===PaymentRequestStatus.EXPIRED) {
-                    swap.state = SoltoBTCSwapState.FAILED;
+                    swap.state = SolToBTCxSwapState.FAILED;
                     changedSwaps[paymentHash] = swap;
                 }
                 if(res===PaymentRequestStatus.REFUNDABLE) {
-                    swap.state = SoltoBTCSwapState.REFUNDABLE;
+                    swap.state = SolToBTCxSwapState.REFUNDABLE;
                     changedSwaps[paymentHash] = swap;
                 }
             }
@@ -276,7 +268,7 @@ class SoltoBTCWrapper implements ISolToBTCxWrapper {
                 continue;
             }
 
-            if(swap.state===SoltoBTCSwapState.REFUNDABLE) {
+            if(swap.state===SolToBTCxSwapState.REFUNDABLE) {
                 returnArr.push(swap);
             }
         }

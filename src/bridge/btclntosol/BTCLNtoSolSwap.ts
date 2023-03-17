@@ -3,13 +3,13 @@ import {AnchorProvider, BN} from "@project-serum/anchor";
 import {AtomicSwapStruct} from "./BTCLNtoSol";
 import * as EventEmitter from "events";
 import * as bolt11 from "bolt11";
-import BTCLNtoSolWrapper, {BTCLNtoSolSwapState} from "./BTCLNtoSolWrapper";
-import IBTCxtoSolSwap from "../IBTCxtoSolSwap";
+import BTCLNtoSolWrapper from "./BTCLNtoSolWrapper";
+import IBTCxtoSolSwap, {BTCxtoSolSwapState} from "../IBTCxtoSolSwap";
 import SwapType from "../SwapType";
 
 export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
 
-    state: number;
+    state: BTCxtoSolSwapState;
 
     readonly fromAddress: PublicKey;
     readonly url: string;
@@ -44,7 +44,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
         this.wrapper = wrapper;
         this.events = new EventEmitter();
         if(typeof(prOrObject)==="string") {
-            this.state = BTCLNtoSolSwapState.PR_CREATED;
+            this.state = BTCxtoSolSwapState.PR_CREATED;
 
             this.fromAddress = fromAddress;
             this.url = url;
@@ -135,7 +135,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
      * @param checkIntervalSeconds  How often to poll the intermediary for answer
      */
     async waitForPayment(abortSignal?: AbortSignal, checkIntervalSeconds?: number): Promise<void> {
-        if(this.state!==BTCLNtoSolSwapState.PR_CREATED) {
+        if(this.state!==BTCxtoSolSwapState.PR_CREATED) {
             throw new Error("Must be in PR_CREATED state!");
         }
 
@@ -143,7 +143,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
 
         if(abortSignal.aborted) throw new Error("Aborted");
 
-        this.state = BTCLNtoSolSwapState.PR_PAID;
+        this.state = BTCxtoSolSwapState.PR_PAID;
 
         this.intermediary = result.intermediary;
         this.data = result.data;
@@ -161,7 +161,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
      * Returns if the swap can be committed
      */
     canCommit(): boolean {
-        return this.state===BTCLNtoSolSwapState.PR_PAID;
+        return this.state===BTCxtoSolSwapState.PR_PAID;
     }
 
     /**
@@ -173,7 +173,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
      * @param abortSignal               Abort signal
      */
     async commit(signer: AnchorProvider, noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<TransactionSignature> {
-        if(this.state!==BTCLNtoSolSwapState.PR_PAID) {
+        if(this.state!==BTCxtoSolSwapState.PR_PAID) {
             throw new Error("Must be in PR_PAID state!");
         }
 
@@ -212,7 +212,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
             return receipt;
         }*/
 
-        this.state = BTCLNtoSolSwapState.CLAIM_COMMITED;
+        this.state = BTCxtoSolSwapState.CLAIM_COMMITED;
 
         await this.save();
 
@@ -234,7 +234,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
             }
             let listener;
             listener = (swap) => {
-                if(swap.state===BTCLNtoSolSwapState.CLAIM_COMMITED) {
+                if(swap.state===BTCxtoSolSwapState.CLAIM_COMMITED) {
                     this.events.removeListener("swapState", listener);
                     if(abortSignal!=null) abortSignal.onabort = null;
                     resolve();
@@ -252,7 +252,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
      * Returns if the swap can be claimed
      */
     canClaim(): boolean {
-        return this.state===BTCLNtoSolSwapState.CLAIM_COMMITED;
+        return this.state===BTCxtoSolSwapState.CLAIM_COMMITED;
     }
 
     /**
@@ -263,7 +263,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
      * @param abortSignal               Abort signal
      */
     async claim(signer: AnchorProvider, noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<TransactionSignature> {
-        if(this.state!==BTCLNtoSolSwapState.CLAIM_COMMITED) {
+        if(this.state!==BTCxtoSolSwapState.CLAIM_COMMITED) {
             throw new Error("Must be in CLAIM_COMMITED state!");
         }
 
@@ -289,7 +289,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
             return receipt;
         }*/
 
-        this.state = BTCLNtoSolSwapState.CLAIM_CLAIMED;
+        this.state = BTCxtoSolSwapState.CLAIM_CLAIMED;
 
         await this.save();
 
@@ -311,7 +311,7 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
             }
             let listener;
             listener = (swap) => {
-                if(swap.state===BTCLNtoSolSwapState.CLAIM_CLAIMED) {
+                if(swap.state===BTCxtoSolSwapState.CLAIM_CLAIMED) {
                     this.events.removeListener("swapState", listener);
                     if(abortSignal!=null) abortSignal.onabort = null;
                     resolve();
@@ -334,14 +334,14 @@ export default class BTCLNtoSolSwap implements IBTCxtoSolSwap {
      */
     async commitAndClaim(signer: AnchorProvider, abortSignal?: AbortSignal): Promise<TransactionSignature[]> {
 
-        if(this.state===BTCLNtoSolSwapState.CLAIM_COMMITED) {
+        if(this.state===BTCxtoSolSwapState.CLAIM_COMMITED) {
             return [
                 null,
                 await this.claim(signer, false, abortSignal)
             ];
         }
 
-        if(this.state!==BTCLNtoSolSwapState.PR_PAID) {
+        if(this.state!==BTCxtoSolSwapState.PR_PAID) {
             throw new Error("Must be in PR_PAID state!");
         }
 

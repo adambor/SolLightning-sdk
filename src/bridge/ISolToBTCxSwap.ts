@@ -80,21 +80,37 @@ interface ISolToBTCxSwap extends ISwap {
      */
     emitEvent(): void;
 
-    serialize(): any;
-    save(): Promise<void>;
-
+    /**
+     * Get's the bitcoin address/lightning invoice of the recipient
+     */
     getAddress(): string;
 
+    /**
+     * Returns the payment hash
+     */
     getPaymentHash(): Buffer;
-    getWrapper(): ISolToBTCxWrapper;
 
     /**
-     * Returns transaction ID or payment secret of the swap
+     * Returns transaction ID (for on-chain) or payment secret (for lightning) of the swap
      */
     getTxId(): string;
 
-    events: EventEmitter;
+    /**
+     * Returns the current state of the swap
+     */
+    getState(): SolToBTCxSwapState;
 
+    getWrapper(): ISolToBTCxWrapper;
+
+}
+
+export enum SolToBTCxSwapState {
+    REFUNDED = -2,
+    FAILED = -1,
+    CREATED = 0,
+    COMMITED = 1,
+    CLAIMED = 2,
+    REFUNDABLE = 3
 }
 
 export default ISolToBTCxSwap;

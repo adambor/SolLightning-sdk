@@ -1,9 +1,8 @@
 import {BN} from "@project-serum/anchor";
 import SwapType from "./SwapType";
+import {EventEmitter} from "events";
 
 interface ISwap {
-
-    serialize(): any;
 
     /**
      * Returns hash identifier of the swap
@@ -34,6 +33,14 @@ interface ISwap {
      * Returns the type of the swap
      */
     getType(): SwapType;
+
+    /**
+     * Event emitter emitting "swapState" event when swap's state changes
+     */
+    events: EventEmitter;
+
+    serialize(): any;
+    save(): Promise<void>;
 
 }
 

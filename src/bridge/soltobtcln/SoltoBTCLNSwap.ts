@@ -3,13 +3,13 @@ import * as EventEmitter from "events";
 import {AnchorProvider, BN} from "@project-serum/anchor";
 import * as bolt11 from "bolt11";
 import SoltoBTCLN, {PaymentRequestStruct} from "./SoltoBTCLN";
-import SoltoBTCLNWrapper, {SoltoBTCLNSwapState} from "./SoltoBTCLNWrapper";
-import ISolToBTCxSwap from "../ISolToBTCxSwap";
+import SoltoBTCLNWrapper from "./SoltoBTCLNWrapper";
+import ISolToBTCxSwap, {SolToBTCxSwapState} from "../ISolToBTCxSwap";
 import SwapType from "../SwapType";
 
 export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
 
-    state: number;
+    state: SolToBTCxSwapState;
 
     readonly fromAddress: PublicKey;
     readonly url: string;
@@ -40,7 +40,7 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
         this.wrapper = wrapper;
         this.events = new EventEmitter();
         if(typeof(prOrObject)==="string") {
-            this.state = SoltoBTCLNSwapState.CREATED;
+            this.state = SolToBTCxSwapState.CREATED;
 
             this.fromAddress = fromAddress;
             this.url = url;
@@ -95,7 +95,7 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
      * Returns if the swap can be committed/started
      */
     canCommit(): boolean {
-        return this.state===SoltoBTCLNSwapState.CREATED;
+        return this.state===SolToBTCxSwapState.CREATED;
     }
 
     /**
@@ -106,7 +106,7 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
      * @param abortSignal               Abort signal
      */
     async commit(signer: AnchorProvider, noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<TransactionSignature> {
-        if(this.state!==SoltoBTCLNSwapState.CREATED) {
+        if(this.state!==SolToBTCxSwapState.CREATED) {
             throw new Error("Must be in CREATED state!");
         }
 
@@ -142,7 +142,7 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
             }
             let listener;
             listener = (swap) => {
-                if(swap.state===SoltoBTCLNSwapState.COMMITED) {
+                if(swap.state===SolToBTCxSwapState.COMMITED) {
                     this.events.removeListener("swapState", listener);
                     if(abortSignal!=null) abortSignal.onabort = null;
                     resolve();
@@ -171,7 +171,7 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
         if(abortSignal.aborted) throw new Error("Aborted");
 
         if(!result.is_paid) {
-            this.state = SoltoBTCLNSwapState.REFUNDABLE;
+            this.state = SolToBTCxSwapState.REFUNDABLE;
 
             await this.save();
 
@@ -189,7 +189,7 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
      * Returns whether a swap can be already refunded
      */
     canRefund(): boolean {
-        return this.state===SoltoBTCLNSwapState.REFUNDABLE || SoltoBTCLN.isExpired(this.data);
+        return this.state===SolToBTCxSwapState.REFUNDABLE || SoltoBTCLN.isExpired(this.data);
     }
 
     /**
@@ -200,7 +200,7 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
      * @param abortSignal               Abort signal
      */
     async refund(signer: AnchorProvider, noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<TransactionSignature> {
-        if(this.state!==SoltoBTCLNSwapState.REFUNDABLE && !SoltoBTCLN.isExpired(this.data)) {
+        if(this.state!==SolToBTCxSwapState.REFUNDABLE && !SoltoBTCLN.isExpired(this.data)) {
             throw new Error("Must be in REFUNDABLE state!");
         }
 
@@ -243,7 +243,7 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
             }
             let listener;
             listener = (swap) => {
-                if(swap.state===SoltoBTCLNSwapState.REFUNDED) {
+                if(swap.state===SolToBTCxSwapState.REFUNDED) {
                     this.events.removeListener("swapState", listener);
                     if(abortSignal!=null) abortSignal.onabort = null;
                     resolve();
@@ -318,6 +318,10 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
 
     getType(): SwapType {
         return SwapType.SOL_TO_BTCLN;
+    }
+
+    getState(): SolToBTCxSwapState {
+        return this.state;
     }
 
 }

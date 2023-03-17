@@ -5,19 +5,10 @@ import * as bolt11 from "bolt11";
 import * as EventEmitter from "events";
 import {AnchorProvider, BN} from "@project-serum/anchor";
 import BTCLNtoSolSwap from "./BTCLNtoSolSwap";
-import BigNumber from "bignumber.js";
-import {ConstantBTCLNtoSol} from "../../Constants";
 import IBTCxtoSolWrapper from "../IBTCxtoSolWrapper";
 import IWrapperStorage from "../IWrapperStorage";
 import {PublicKey} from "@solana/web3.js";
-
-export const BTCLNtoSolSwapState = {
-    FAILED: -1,
-    PR_CREATED: 0,
-    PR_PAID: 1,
-    CLAIM_COMMITED: 2,
-    CLAIM_CLAIMED: 3,
-};
+import {BTCxtoSolSwapState} from "../IBTCxtoSolSwap";
 
 class BTCLNtoSolWrapper implements IBTCxtoSolWrapper{
 
@@ -103,20 +94,20 @@ class BTCLNtoSolWrapper implements IBTCxtoSolWrapper{
 
             let swapChanged = false;
             if(event.name==="InitializeEvent") {
-                if(swap.state===BTCLNtoSolSwapState.PR_PAID || swap.state===BTCLNtoSolSwapState.PR_CREATED) {
-                    swap.state = BTCLNtoSolSwapState.CLAIM_COMMITED;
+                if(swap.state===BTCxtoSolSwapState.PR_PAID || swap.state===BTCxtoSolSwapState.PR_CREATED) {
+                    swap.state = BTCxtoSolSwapState.CLAIM_COMMITED;
                     swapChanged = true;
                 }
             }
             if(event.name==="ClaimEvent") {
-                if(swap.state===BTCLNtoSolSwapState.PR_PAID || swap.state===BTCLNtoSolSwapState.PR_CREATED || swap.state===BTCLNtoSolSwapState.CLAIM_COMMITED) {
-                    swap.state = BTCLNtoSolSwapState.CLAIM_CLAIMED;
+                if(swap.state===BTCxtoSolSwapState.PR_PAID || swap.state===BTCxtoSolSwapState.PR_CREATED || swap.state===BTCxtoSolSwapState.CLAIM_COMMITED) {
+                    swap.state = BTCxtoSolSwapState.CLAIM_CLAIMED;
                     swapChanged = true;
                 }
             }
             if(event.name==="RefundEvent") {
-                if(swap.state===BTCLNtoSolSwapState.PR_PAID || swap.state===BTCLNtoSolSwapState.PR_CREATED || swap.state===BTCLNtoSolSwapState.CLAIM_COMMITED) {
-                    swap.state = BTCLNtoSolSwapState.FAILED;
+                if(swap.state===BTCxtoSolSwapState.PR_PAID || swap.state===BTCxtoSolSwapState.PR_CREATED || swap.state===BTCxtoSolSwapState.CLAIM_COMMITED) {
+                    swap.state = BTCxtoSolSwapState.FAILED;
                     swapChanged = true;
                 }
             }
@@ -159,12 +150,12 @@ class BTCLNtoSolWrapper implements IBTCxtoSolWrapper{
             const swap = this.swapData[paymentHash];
 
 
-            if(swap.state===BTCLNtoSolSwapState.PR_CREATED) {
+            if(swap.state===BTCxtoSolSwapState.PR_CREATED) {
                 //Check if it's maybe already paid
                 try {
                     const res = await this.contract.getPaymentAuthorization(swap.pr, swap.minOut, swap.url);
                     if(res.is_paid) {
-                        swap.state = BTCLNtoSolSwapState.PR_PAID;
+                        swap.state = BTCxtoSolSwapState.PR_PAID;
 
                         swap.data = res.data;
                         swap.prefix = res.prefix;
@@ -177,34 +168,34 @@ class BTCLNtoSolWrapper implements IBTCxtoSolWrapper{
                 } catch (e) {
                     console.error(e);
                     if(e instanceof PaymentAuthError) {
-                        swap.state = BTCLNtoSolSwapState.FAILED;
+                        swap.state = BTCxtoSolSwapState.FAILED;
                         changedSwaps[paymentHash] = swap;
                     }
                 }
             }
 
-            if(swap.state===BTCLNtoSolSwapState.PR_PAID) {
+            if(swap.state===BTCxtoSolSwapState.PR_PAID) {
                 //Check if it's already committed
                 if(BTCLNtoSol.isExpired(swap.data)) {
                     //Already expired, we can remove it
-                    swap.state = BTCLNtoSolSwapState.FAILED;
+                    swap.state = BTCxtoSolSwapState.FAILED;
                     changedSwaps[paymentHash] = swap;
                 } else if(await this.contract.isClaimable(swap.intermediary, swap.data)) {
                     //Already committed
-                    swap.state = BTCLNtoSolSwapState.CLAIM_COMMITED;
+                    swap.state = BTCxtoSolSwapState.CLAIM_COMMITED;
                     changedSwaps[paymentHash] = swap;
                 }
             }
 
-            if(swap.state===BTCLNtoSolSwapState.CLAIM_COMMITED) {
+            if(swap.state===BTCxtoSolSwapState.CLAIM_COMMITED) {
                 //Check if it's already successfully paid
                 const commitStatus = await this.contract.getCommitStatus(swap.intermediary, swap.data);
                 if(commitStatus===BTCLNtoEVMCommitStatus.PAID) {
-                    swap.state = BTCLNtoSolSwapState.CLAIM_CLAIMED;
+                    swap.state = BTCxtoSolSwapState.CLAIM_CLAIMED;
                     changedSwaps[paymentHash] = swap;
                 }
                 if(commitStatus===BTCLNtoEVMCommitStatus.NOT_COMMITTED || commitStatus===BTCLNtoEVMCommitStatus.EXPIRED) {
-                    swap.state = BTCLNtoSolSwapState.FAILED;
+                    swap.state = BTCxtoSolSwapState.FAILED;
                     changedSwaps[paymentHash] = swap;
                 }
             }
@@ -253,7 +244,7 @@ class BTCLNtoSolWrapper implements IBTCxtoSolWrapper{
                 continue;
             }
 
-            if(swap.state===BTCLNtoSolSwapState.PR_CREATED || swap.state===BTCLNtoSolSwapState.CLAIM_CLAIMED || swap.state===BTCLNtoSolSwapState.FAILED) {
+            if(swap.state===BTCxtoSolSwapState.PR_CREATED || swap.state===BTCxtoSolSwapState.CLAIM_CLAIMED || swap.state===BTCxtoSolSwapState.FAILED) {
                 continue;
             }
 

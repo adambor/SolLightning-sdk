@@ -3,10 +3,8 @@ import ISoltoBTCxWrapper from "./bridge/ISolToBTCxWrapper";
 import SwapType from "./bridge/SwapType";
 import Swapper from "./bridge/Swapper";
 
-import {BTCLNtoSolSwapState} from "./bridge/btclntosol/BTCLNtoSolWrapper";
-import {BTCtoSolSwapState} from "./bridge/btctosol/BTCtoSolWrapper";
-import {SoltoBTCLNSwapState} from "./bridge/soltobtcln/SoltoBTCLNWrapper";
-import {SoltoBTCSwapState} from "./bridge/soltobtc/SoltoBTCWrapper";
+import {BTCxtoSolSwapState} from "./bridge/IBTCxtoSolSwap";
+import {SolToBTCxSwapState} from "./bridge/ISolToBTCxSwap";
 
 import ISwap from "./bridge/ISwap";
 import IBTCxtoSolSwap from "./bridge/IBTCxtoSolSwap";
@@ -22,10 +20,8 @@ export {
     IBTCxtoSolWrapper,
     ISoltoBTCxWrapper,
 
-    BTCLNtoSolSwapState,
-    BTCtoSolSwapState,
-    SoltoBTCLNSwapState,
-    SoltoBTCSwapState,
+    BTCxtoSolSwapState,
+    SolToBTCxSwapState,
 
     ISwap,
     IBTCxtoSolSwap,

@@ -23,10 +23,6 @@ interface IBTCxtoSolSwap extends ISwap {
      */
     getFee(): BN;
 
-    serialize(): any;
-
-    save(): Promise<void>;
-
     /**
      * A blocking promise resolving when payment was received by the intermediary and client can continue
      * rejecting in case of failure
@@ -92,7 +88,7 @@ interface IBTCxtoSolSwap extends ISwap {
     /**
      * Returns current state of the swap
      */
-    getState(): number;
+    getState(): BTCxtoSolSwapState;
 
     /**
      * @fires BTCtoSolWrapper#swapState
@@ -100,17 +96,31 @@ interface IBTCxtoSolSwap extends ISwap {
      */
     emitEvent(): void;
 
+    /**
+     * Get payment hash
+     */
     getPaymentHash(): Buffer;
 
+    /**
+     * Returns a string that can be displayed as QR code representation of the address (with bitcoin: or lightning: prefix)
+     */
     getQrData(): string;
+
+    /**
+     * Returns a bitcoin address/lightning network invoice of the swap.
+     */
     getAddress(): string;
 
     getWrapper(): IBTCxtoSolWrapper;
 
-    events: EventEmitter;
+}
 
-    state: number
-
+export enum BTCxtoSolSwapState {
+    FAILED = -1,
+    PR_CREATED = 0,
+    PR_PAID = 1,
+    CLAIM_COMMITED = 2,
+    CLAIM_CLAIMED = 3
 }
 
 export default IBTCxtoSolSwap;

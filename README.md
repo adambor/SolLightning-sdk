@@ -1,5 +1,7 @@
 # SolLightning SDK
 
+An overview of the whole system is available [here](https://github.com/adambor/SolLightning-readme)
+
 A javascript client for SolLightning bitcoin <-> solana trustlesss cross-chain swaps.
 
 This project is intended to be used in web-browsers and browser-like environments, it uses browser's local storage to store swap data.

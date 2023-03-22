@@ -525,6 +525,11 @@ export const programIdl: any = {
                     "isSigner": true
                 },
                 {
+                    "name": "offerer",
+                    "isMut": false,
+                    "isSigner": false
+                },
+                {
                     "name": "claimerReceiveTokenAccount",
                     "isMut": true,
                     "isSigner": false
@@ -571,6 +576,11 @@ export const programIdl: any = {
                     "isSigner": true
                 },
                 {
+                    "name": "offerer",
+                    "isMut": false,
+                    "isSigner": false
+                },
+                {
                     "name": "claimer",
                     "isMut": false,
                     "isSigner": false
@@ -610,6 +620,11 @@ export const programIdl: any = {
                     "name": "signer",
                     "isMut": true,
                     "isSigner": true
+                },
+                {
+                    "name": "offerer",
+                    "isMut": false,
+                    "isSigner": false
                 },
                 {
                     "name": "claimerReceiveTokenAccount",
@@ -666,6 +681,11 @@ export const programIdl: any = {
                     "name": "signer",
                     "isMut": true,
                     "isSigner": true
+                },
+                {
+                    "name": "offerer",
+                    "isMut": false,
+                    "isSigner": false
                 },
                 {
                     "name": "claimer",
@@ -1015,6 +1035,6 @@ export const programIdl: any = {
         }
     ],
     "metadata": {
-        "address": "AxE1wvXnceDMrappeMJWyh72YeEWaxcd984aVDSVBM1E"
+        "address": "4xdY2JN9aBisRCrpz11wEWjosAjLoidxoVRvivJUMuNU"
     }
 };

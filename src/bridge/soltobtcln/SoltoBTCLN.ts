@@ -393,15 +393,17 @@ class SoltoBTCLN {
         const paymentHash = Buffer.from(data.paymentHash, "hex");
 
         const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
+        const ataIntermediary = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, data.intermediary);
 
         console.log("Authority key: ", this.vaultAuthorityKey);
 
         const ix = await this.program.methods
-            .offererInitializePayIn(data.amount, data.expiry, paymentHash, new BN(2), new BN(confirmations), nonce)
+            .offererInitializePayIn(data.amount, data.expiry, paymentHash, new BN(2), new BN(confirmations), nonce, false, Buffer.alloc(32, 0))
             .accounts({
                 initializer: address,
                 initializerDepositTokenAccount: ata,
                 claimer: data.intermediary,
+                claimerTokenAccount: ataIntermediary,
                 escrowState: this.getEscrowStateKey(paymentHash),
                 vault: this.vaultKey,
                 vaultAuthority: this.vaultAuthorityKey,
@@ -496,12 +498,15 @@ class SoltoBTCLN {
 
         const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
 
+        const ataIntermediary = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, data.intermediary);
+
         const ix = await this.program.methods
-            .offererInitializePayIn(data.amount, data.expiry, paymentHash, new BN(0), new BN(0), new BN(0))
+            .offererInitializePayIn(data.amount, data.expiry, paymentHash, new BN(0), new BN(0), new BN(0), false, Buffer.alloc(32, 0))
             .accounts({
                 initializer: address,
                 initializerDepositTokenAccount: ata,
                 claimer: data.intermediary,
+                claimerTokenAccount: ataIntermediary,
                 escrowState: this.getEscrowStateKey(paymentHash),
                 vault: this.vaultKey,
                 vaultAuthority: this.vaultAuthorityKey,

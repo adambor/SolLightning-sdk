@@ -2,7 +2,6 @@ import fetch, {Response} from "cross-fetch";
 import * as bolt11 from "bolt11";
 
 import {createHash, randomBytes} from "crypto-browserify";
-import {Buffer} from "buffer";
 import {
     Ed25519Program,
     PublicKey,
@@ -736,19 +735,22 @@ class BTCLNtoSol {
         return messageBuffer;
     }
 
-    async createPayWithAuthorizationIx(intermediary: PublicKey, data: AtomicSwapStruct, timeout: string, prefix: string, signature: string, nonce: number): Promise<TransactionInstruction[]> {
+    async createPayWithAuthorizationIx(intermediary: PublicKey, data: AtomicSwapStruct, timeout: string, prefix: string, signature: string, nonce: number, txoHash?: Buffer): Promise<TransactionInstruction[]> {
 
         const messageBuffer = await this.isValidAuthorization(intermediary, data, timeout, prefix, signature, nonce);
 
         const paymentHash = Buffer.from(data.paymentHash, "hex");
         const signatureBuffer = Buffer.from(signature, "hex");
 
+        const claimerAta = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, data.intermediary);
+
         let result = await this.program.methods
-            .offererInitialize(new BN(nonce), data.amount, data.expiry, paymentHash, new BN(0), new BN(0), new BN(0), new BN(timeout), signatureBuffer)
+            .offererInitialize(new BN(nonce), data.amount, data.expiry, paymentHash, new BN(0), new BN(0), new BN(0), new BN(timeout), signatureBuffer, true, txoHash || Buffer.alloc(32, 0))
             .accounts({
                 initializer: data.intermediary,
                 offerer: intermediary,
                 claimer: data.intermediary,
+                claimerTokenAccount: claimerAta,
                 mint: this.WBTC_ADDRESS,
                 userData: this.getUserVaultKey(intermediary),
                 escrowState: this.getEscrowStateKey(paymentHash),
@@ -771,9 +773,9 @@ class BTCLNtoSol {
 
     }
 
-    async createPayWithAuthorizationTx(intermediary: PublicKey, data: AtomicSwapStruct, timeout: string, prefix: string, signature: string, nonce: number): Promise<Transaction> {
+    async createPayWithAuthorizationTx(intermediary: PublicKey, data: AtomicSwapStruct, timeout: string, prefix: string, signature: string, nonce: number, txoHash?: Buffer): Promise<Transaction> {
 
-        const ixs = await this.createPayWithAuthorizationIx(intermediary, data, timeout, prefix, signature, nonce);
+        const ixs = await this.createPayWithAuthorizationIx(intermediary, data, timeout, prefix, signature, nonce, txoHash);
         const tx = new Transaction();
         for(let ix of ixs) {
             tx.add(ix);
@@ -798,6 +800,7 @@ class BTCLNtoSol {
         const claimIx = await this.program.methods
             .claimerClaimPayOut(secret)
             .accounts({
+                signer: data.intermediary,
                 claimer: data.intermediary,
                 claimerReceiveTokenAccount: ata,
                 offerer: intermediary,

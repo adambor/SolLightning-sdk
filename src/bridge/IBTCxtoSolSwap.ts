@@ -31,7 +31,7 @@ interface IBTCxtoSolSwap extends ISwap {
      * @param checkIntervalSeconds  How often to poll the intermediary for answer
      * @param updateCallback        Callback called when txId is found, and also called with subsequent confirmations
      */
-    waitForPayment(abortSignal?: AbortSignal, checkIntervalSeconds?: number, updateCallback?: (txId: string, confirmations: number, targetConfirmations: number, amount: BN, totalFee: BN, received: BN) => void): Promise<void>;
+    waitForPayment(abortSignal?: AbortSignal, checkIntervalSeconds?: number, updateCallback?: (txId: string, confirmations: number, targetConfirmations: number) => void): Promise<void>;
 
     /**
      * Returns if the swap can be committed
@@ -76,19 +76,19 @@ interface IBTCxtoSolSwap extends ISwap {
      */
     waitTillClaimed(abortSignal?: AbortSignal): Promise<void>;
 
-    /**
-     * Signs both, commit and claim transaction at once using signAllTransactions methods, wait for commit to confirm TX and then sends claim TX
-     * If swap is already commited, it just signs and executes the claim transaction
-     *
-     * @param signer            Signer to use to send the claim transaction
-     * @param abortSignal       Abort signal
-     */
-    commitAndClaim(signer: AnchorProvider, abortSignal?: AbortSignal): Promise<TransactionSignature[]>;
+    // /**
+    //  * Signs both, commit and claim transaction at once using signAllTransactions methods, wait for commit to confirm TX and then sends claim TX
+    //  * If swap is already commited, it just signs and executes the claim transaction
+    //  *
+    //  * @param signer            Signer to use to send the claim transaction
+    //  * @param abortSignal       Abort signal
+    //  */
+    // commitAndClaim(signer: AnchorProvider, abortSignal?: AbortSignal): Promise<TransactionSignature[]>;
 
-    /**
-     * Returns current state of the swap
-     */
-    getState(): BTCxtoSolSwapState;
+    // /**
+    //  * Returns current state of the swap
+    //  */
+    // getState(): BTCxtoSolSwapState;
 
     /**
      * @fires BTCtoSolWrapper#swapState

@@ -1,8 +1,17 @@
 import fetch, {Response} from "cross-fetch";
 import * as bitcoin from "bitcoinjs-lib";
 import {ConstantSoltoBTC} from "./Constants";
+import {createHash} from "crypto-browserify";
+import {BN} from "@project-serum/anchor";
+import has = Reflect.has;
 
 const url = "https://mempool.space/testnet/api/";
+
+const timeoutPromise = (timeoutSeconds) => {
+    return new Promise(resolve => {
+        setTimeout(resolve, timeoutSeconds*1000)
+    });
+};
 
 type TxVout = {
     scriptpubkey: string,
@@ -88,6 +97,130 @@ class ChainUtils {
 
     }
 
+    static async getRawTransaction(txId: string): Promise<Buffer> {
+
+        const response: Response = await fetch(url+"tx/"+txId+"/hex", {
+            method: "GET"
+        });
+
+        if(response.status!==200) {
+            let resp: string;
+            try {
+                resp = await response.text();
+            } catch (e) {
+                throw new Error(response.statusText);
+            }
+            throw new Error(resp);
+        }
+
+        let resp: string = await response.text();
+
+        return Buffer.from(resp, "hex");
+
+    }
+
+    static async getAddressTransactions(address: string): Promise<BitcoinTransaction[]> {
+
+        const response: Response = await fetch(url+"address/"+address+"/txs", {
+            method: "GET"
+        });
+
+        if(response.status!==200) {
+            let resp: string;
+            try {
+                resp = await response.text();
+            } catch (e) {
+                throw new Error(response.statusText);
+            }
+            throw new Error(resp);
+        }
+
+        let jsonBody: any = await response.json();
+
+        return jsonBody;
+
+    }
+
+    static async checkAddressTxos(address: string, txoHash: Buffer): Promise<{
+        tx: BitcoinTransaction,
+        vout: number
+    }> {
+
+        const txs = await ChainUtils.getAddressTransactions(address);
+
+        let found: {
+            tx: BitcoinTransaction,
+            vout: number
+        } = null;
+
+        for(let tx of txs) {
+            for(let i=0;i<tx.vout.length;i++) {
+                const vout = tx.vout[i];
+                const hash = createHash("sha256").update(Buffer.concat([
+                    Buffer.from(new BN(vout.value).toArray("le", 8)),
+                    Buffer.from(vout.scriptpubkey, "hex")
+                ])).digest();
+                if(txoHash.equals(hash)) {
+                    if(found==null) {
+                        found = {
+                            tx,
+                            vout: i
+                        };
+                    } else {
+                        if(tx.status.confirmed && !found.tx.status.confirmed) {
+                            found = {
+                                tx,
+                                vout: i
+                            }
+                        }
+                        if(tx.status.confirmed && found.tx.status.confirmed) {
+                            if(tx.status.block_height < found.tx.status.block_height) {
+                                found = {
+                                    tx,
+                                    vout: i
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return found;
+
+    }
+
+    static async waitForAddressTxo(address: string, txoHash: Buffer, requiredConfirmations: number, stateUpdateCbk:(confirmations: number, txId: string, vout: number) => void, abortSignal?: AbortSignal, intervalSeconds?: number): Promise<{
+        tx: BitcoinTransaction,
+        vout: number
+    }> {
+
+        if(abortSignal!=null && abortSignal.aborted) {
+            throw new Error("Aborted");
+        }
+
+        while(!abortSignal.aborted) {
+            const result = await ChainUtils.checkAddressTxos(address, txoHash);
+            if(result!=null) {
+                let confirmations = 0;
+                if(result.tx.status.confirmed) {
+                    const tipHeight = await ChainUtils.getTipBlockHeight();
+                    confirmations = tipHeight-result.tx.status.block_height+1;
+                }
+
+                if(stateUpdateCbk!=null) stateUpdateCbk(confirmations, result.tx.txid, result.vout);
+
+                if(confirmations>=requiredConfirmations) {
+                    return result;
+                }
+            }
+            await timeoutPromise(intervalSeconds || 5);
+        }
+
+        throw new Error("Aborted");
+
+    }
+
     static transactionHasOutput(tx: BitcoinTransaction, address: string, amount: number) {
 
         const outputScript = bitcoin.address.toOutputScript(address, ConstantSoltoBTC.network);
@@ -98,6 +231,31 @@ class ChainUtils {
         }
 
         return false;
+
+    }
+
+
+    static async getTipBlockHeight() : Promise<number> {
+
+        const response: Response = await fetch(url+"blocks/tip/height", {
+            method: "GET"
+        });
+
+        if(response.status!==200) {
+            let resp: string;
+            try {
+                resp = await response.text();
+            } catch (e) {
+                throw new Error(response.statusText);
+            }
+            throw new Error(resp);
+        }
+
+        let respText: any = await response.text();
+
+        const blockheight = parseInt(respText);
+
+        return blockheight;
 
     }
 
@@ -127,7 +285,7 @@ class ChainUtils {
 
     }
 
-    static async getBlockHash(height: number) {
+    static async getBlockHash(height: number): Promise<string> {
 
         const response: Response = await fetch(url+"block-height/"+height, {
             method: "GET"

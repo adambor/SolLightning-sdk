@@ -20,6 +20,8 @@ import * as bitcoin from "bitcoinjs-lib";
 import {ECPairAPI, ECPairFactory, TinySecp256k1Interface} from 'ecpair';
 
 import * as tinysecp from "tiny-secp256k1";
+import ChainUtils from "../../ChainUtils";
+import BtcRelay from "../btcrelay/BtcRelay";
 const ECPair: ECPairAPI = ECPairFactory(tinysecp);
 
 const timeoutPromise = (timeoutSeconds) => {
@@ -35,13 +37,16 @@ const VAULT_SEED = "vault";
 const USER_VAULT_SEED = "uservault";
 const AUTHORITY_SEED = "authority";
 const MAIN_STATE_SEED = "main_state";
+const TX_DATA_SEED = "data";
 
 export type AtomicSwapStruct = {
     intermediary: PublicKey,
     token: PublicKey,
     amount: BN,
     paymentHash: string,
-    expiry: BN
+    expiry: BN,
+    kind?: number,
+    confirmations?: number
 };
 
 export class PaymentAuthError extends Error {
@@ -82,9 +87,12 @@ class BTCLNtoSol {
     vaultAuthorityKey: PublicKey;
     vaultKey: PublicKey;
 
+    btcRelay: BtcRelay;
+
     constructor(provider: AnchorProvider, wbtcToken: PublicKey) {
         this.provider = provider;
         this.WBTC_ADDRESS = wbtcToken;
+        this.btcRelay = new BtcRelay(provider);
         this.program = new Program(programIdl, programIdl.metadata.address, this.provider);
         this.vaultAuthorityKey = PublicKey.findProgramAddressSync(
             [Buffer.from(AUTHORITY_SEED)],
@@ -92,6 +100,13 @@ class BTCLNtoSol {
         )[0];
         this.vaultKey = PublicKey.findProgramAddressSync(
             [Buffer.from(VAULT_SEED), this.WBTC_ADDRESS.toBuffer()],
+            this.program.programId
+        )[0];
+    }
+
+    getSwapDataKey(reversedTxId: Buffer, wallet: PublicKey) {
+        return PublicKey.findProgramAddressSync(
+            [Buffer.from(TX_DATA_SEED), reversedTxId, wallet.toBuffer()],
             this.program.programId
         )[0];
     }
@@ -108,6 +123,15 @@ class BTCLNtoSol {
             [Buffer.from(STATE_SEED), hash],
             this.program.programId
         )[0];
+    }
+
+    async getData(pubkey: PublicKey) {
+        try {
+            return await this.program.account.data.fetch(pubkey);
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
     }
 
     static isExpired(data: AtomicSwapStruct): boolean {
@@ -300,6 +324,7 @@ class BTCLNtoSol {
 
     }
 
+
     async createOnchainPaymentRequest(address: PublicKey, amount: BN, url: string): Promise<{
         secret: Buffer,
         hash: Buffer,
@@ -364,6 +389,70 @@ class BTCLNtoSol {
             generatedPrivKey: keypair.privateKey,
             intermediaryBtcPublicKey: jsonBody.data.publicKey,
             csvDelta: jsonBody.data.csvDelta
+        };
+
+    }
+
+    async createOnchainPaymentRequestRelay(address: PublicKey, amount: BN, url: string): Promise<{
+        address: string,
+        swapFee: BN,
+        intermediary: PublicKey,
+        data: AtomicSwapStruct
+        prefix: string,
+        timeout: string,
+        signature: string,
+        nonce: number
+    }> {
+        const response: Response = await fetch(url+"/getAddress", {
+            method: "POST",
+            body: JSON.stringify({
+                address: address.toBase58(),
+                amount: amount.toString()
+            }),
+            headers: {'Content-Type': 'application/json'}
+        });
+
+        if(response.status!==200) {
+            let resp: string;
+            try {
+                resp = await response.text();
+            } catch (e) {
+                throw new Error(response.statusText);
+            }
+            throw new Error(resp);
+        }
+
+        let jsonBody: any = await response.json();
+
+        const lockingScript = bitcoin.address.toOutputScript(jsonBody.data.btcAddress);
+
+        const desiredHash = createHash("sha256").update(Buffer.concat([
+            Buffer.from(new BN(0).toArray("le", 8)),
+            Buffer.from(amount.toArray("le", 8)),
+            lockingScript
+        ])).digest();
+
+        const suppliedHash = Buffer.from(jsonBody.data.data.paymentHash,"hex");
+
+        if(!desiredHash.equals(suppliedHash)) throw new Error("Invalid payment hash returned!");
+
+        return {
+            address: jsonBody.data.btcAddress,
+            swapFee: new BN(jsonBody.data.swapFee),
+            intermediary: new PublicKey(jsonBody.data.address),
+            data: {
+                intermediary: new PublicKey(jsonBody.data.data.intermediary),
+                token: new PublicKey(jsonBody.data.data.token),
+                amount: new BN(jsonBody.data.data.amount),
+                paymentHash: jsonBody.data.data.paymentHash,
+                expiry: new BN(jsonBody.data.data.expiry),
+                kind: jsonBody.data.data.kind,
+                confirmations: jsonBody.data.data.confirmations
+            },
+            prefix: jsonBody.data.prefix,
+            timeout: jsonBody.data.timeout,
+            signature: jsonBody.data.signature,
+            nonce: jsonBody.data.nonce
         };
 
     }
@@ -745,7 +834,7 @@ class BTCLNtoSol {
         const claimerAta = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, data.intermediary);
 
         let result = await this.program.methods
-            .offererInitialize(new BN(nonce), data.amount, data.expiry, paymentHash, new BN(0), new BN(0), new BN(0), new BN(timeout), signatureBuffer, true, txoHash || Buffer.alloc(32, 0))
+            .offererInitialize(new BN(nonce), data.amount, data.expiry, paymentHash, new BN(data.kind || 0), new BN(data.confirmations || 0), new BN(0), new BN(timeout), signatureBuffer, true, txoHash || Buffer.alloc(32, 0))
             .accounts({
                 initializer: data.intermediary,
                 offerer: intermediary,
@@ -839,6 +928,70 @@ class BTCLNtoSol {
         return tx;
     }
 
+    async createClaimTxs(intermediary: PublicKey, data: AtomicSwapStruct, txId: string, vout: number): Promise<Transaction[]> {
+        const reversedTxId = Buffer.from(txId, "hex").reverse();
+
+        const merkleProof = await ChainUtils.getTransactionProof(txId);
+        const btcBlockhash = await ChainUtils.getBlockHash(merkleProof.block_height);
+        const commitedHeader = await this.btcRelay.retrieveBlockLog(btcBlockhash, merkleProof.block_height+data.confirmations-1);
+        if(commitedHeader==null) throw new Error("BTC Relay not synchronized to required blockheight");
+
+        const swapDataKey = this.getSwapDataKey(reversedTxId, data.intermediary);
+
+        const txs: Transaction[] = [];
+
+        const fetchedDataAccount = await this.getData(swapDataKey);
+        if(fetchedDataAccount!=null) {
+            console.log("Will erase previous data account");
+            const eraseTx = await this.createCloseDataTx(reversedTxId, data.intermediary);
+            txs.push(eraseTx);
+        }
+
+        const rawTxBuffer = await ChainUtils.getRawTransaction(txId);
+
+        const writeData: Buffer = Buffer.concat([
+            Buffer.from(new BN(vout).toArray("le", 4)),
+            rawTxBuffer
+        ]);
+
+        let pointer = 0;
+        while(pointer<writeData.length) {
+            const writeLen = Math.min(writeData.length-pointer, 1000);
+
+            const writeTx = await this.createWriteDataTx(reversedTxId, data.intermediary, writeData.length, writeData.slice(pointer, writeLen));
+            txs.push(writeTx);
+
+            pointer += writeLen;
+        }
+
+        const reversedMerkleProof: Buffer[] = merkleProof.merkle.map((e) => Buffer.from(e, "hex"));
+
+        const verifyIx = await this.btcRelay.createVerifyIx(reversedTxId, data.confirmations, merkleProof.pos, reversedMerkleProof, commitedHeader);
+        const claimIx = await this.program.methods
+            .claimerClaimWithExtData(reversedTxId)
+            .accounts({
+                signer: data.intermediary,
+                claimer: data.intermediary,
+                offerer: intermediary,
+                initializer: data.intermediary,
+                data: swapDataKey,
+                userData: this.getUserVaultKey(data.intermediary),
+                escrowState: this.getEscrowStateKey(Buffer.from(data.paymentHash, "hex")),
+                systemProgram: SystemProgram.programId,
+                ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY
+            })
+            .instruction();
+
+        const claimTx = new Transaction();
+        claimTx.add(verifyIx);
+        claimTx.add(claimIx);
+
+        txs.push(claimTx);
+
+        return txs;
+
+    }
+
     /*createRejectTx(intermediary: PublicKey, data: AtomicSwapStruct): Promise<Transaction> {
 
         const expiryTimestamp = data.expiry;
@@ -866,6 +1019,47 @@ class BTCLNtoSol {
             .transaction();
 
     }*/
+
+    createCloseDataIx(reversedTxId: Buffer, wallet: PublicKey): Promise<TransactionInstruction> {
+
+        return this.program.methods
+            .closeData(reversedTxId)
+            .accounts({
+                signer: wallet,
+                data: this.getSwapDataKey(reversedTxId, wallet)
+            })
+            .instruction();
+
+    }
+
+    async createCloseDataTx(reversedTxId: Buffer, wallet: PublicKey): Promise<Transaction> {
+        const claimIx = await this.createCloseDataIx(reversedTxId, wallet);
+
+        const tx = new Transaction();
+        tx.add(claimIx);
+
+        return tx;
+    }
+
+    createWriteDataIx(reversedTxId: Buffer, wallet: PublicKey, len: number, slice: Buffer): Promise<TransactionInstruction> {
+        return this.program.methods
+            .writeData(reversedTxId, len, slice)
+            .accounts({
+                signer: wallet,
+                data: this.getSwapDataKey(reversedTxId, wallet),
+                systemProgram: SystemProgram.programId
+            })
+            .instruction();
+    }
+
+    async createWriteDataTx(reversedTxId: Buffer, wallet: PublicKey, len: number, slice: Buffer): Promise<Transaction> {
+        const claimIx = await this.createWriteDataIx(reversedTxId, wallet, len, slice);
+
+        const tx = new Transaction();
+        tx.add(claimIx);
+
+        return tx;
+    }
 
 }
 

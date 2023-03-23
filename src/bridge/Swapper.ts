@@ -16,13 +16,15 @@ import * as bolt11 from "bolt11";
 import SwapType from "./SwapType";
 import {Bitcoin, ConstantBTCLNtoSol, ConstantBTCtoSol, ConstantSoltoBTC, ConstantSoltoBTCLN} from "../Constants";
 import {PublicKey} from "@solana/web3.js";
+import BTCtoSolNewWrapper from "./btctosolNew/BTCtoSolNewWrapper";
+import BTCtoSolNewSwap from "./btctosolNew/BTCtoSolNewSwap";
 
 export default class Swapper {
 
     soltobtcln: SoltoBTCLNWrapper;
     soltobtc: SoltoBTCWrapper;
     btclntosol: BTCLNtoSolWrapper;
-    btctosol: BTCtoSolWrapper;
+    btctosol: BTCtoSolNewWrapper;
 
     private readonly ports: {
         [key in SwapType]: number
@@ -63,7 +65,7 @@ export default class Swapper {
         this.soltobtcln = new SoltoBTCLNWrapper(new LocalWrapperStorage("solSwaps-SoltoBTCLN"), provider, wbtcToken==null ? Bitcoin.wbtcToken : wbtcToken);
         this.soltobtc = new SoltoBTCWrapper(new LocalWrapperStorage("solSwaps-SoltoBTC"), provider, wbtcToken==null ? Bitcoin.wbtcToken : wbtcToken);
         this.btclntosol = new BTCLNtoSolWrapper(new LocalWrapperStorage("solSwaps-BTCLNtoSol"), provider, wbtcToken==null ? Bitcoin.wbtcToken : wbtcToken);
-        this.btctosol = new BTCtoSolWrapper(new LocalWrapperStorage("solSwaps-BTCtoSol"), provider, wbtcToken==null ? Bitcoin.wbtcToken : wbtcToken);
+        this.btctosol = new BTCtoSolNewWrapper(new LocalWrapperStorage("solSwaps-BTCtoSol"), provider, wbtcToken==null ? Bitcoin.wbtcToken : wbtcToken);
 
         const ports = {
             [SwapType.BTCLN_TO_SOL]: 4000,
@@ -167,7 +169,7 @@ export default class Swapper {
      *
      * @param amount        Amount to receive, in satoshis (bitcoin's smallest denomination)
      */
-    createBTCtoSolSwap(amount: BN): Promise<BTCtoSolSwap> {
+    createBTCtoSolSwap(amount: BN): Promise<BTCtoSolNewSwap> {
         return this.btctosol.create(amount, this.intermediaryUrl+":"+this.ports[SwapType.BTC_TO_SOL]);
     }
 

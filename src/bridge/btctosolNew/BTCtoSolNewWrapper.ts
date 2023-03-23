@@ -79,8 +79,12 @@ class BTCtoSolNewWrapper implements IBTCxtoSolWrapper {
         this.swapData = await this.storage.loadSwapData<BTCtoSolNewSwap>(this, BTCtoSolNewSwap);
 
         const processEvent = (event: any, slotNumber: number, signature: string) => {
-            console.log("EVENT: ", event);
             const paymentHash = Buffer.from(event.data.hash).toString("hex");
+
+            console.log("Payment hash: ", paymentHash);
+
+            console.log("Swaps: ", this.swapData);
+
             const swap = this.swapData[paymentHash];
 
             console.log("Swap found: ", swap);
@@ -95,13 +99,13 @@ class BTCtoSolNewWrapper implements IBTCxtoSolWrapper {
                 }
             }
             if(event.name==="ClaimEvent") {
-                if(swap.state===BTCtoSolNewSwapState.PR_CREATED || swap.state===BTCtoSolNewSwapState.CLAIM_COMMITED) {
+                if(swap.state===BTCtoSolNewSwapState.PR_CREATED || swap.state===BTCtoSolNewSwapState.CLAIM_COMMITED || swap.state===BTCtoSolNewSwapState.BTC_TX_CONFIRMED) {
                     swap.state = BTCtoSolNewSwapState.CLAIM_CLAIMED;
                     swapChanged = true;
                 }
             }
             if(event.name==="RefundEvent") {
-                if(swap.state===BTCtoSolNewSwapState.PR_CREATED || swap.state===BTCtoSolNewSwapState.CLAIM_COMMITED) {
+                if(swap.state===BTCtoSolNewSwapState.PR_CREATED || swap.state===BTCtoSolNewSwapState.CLAIM_COMMITED || swap.state===BTCtoSolNewSwapState.BTC_TX_CONFIRMED) {
                     swap.state = BTCtoSolNewSwapState.FAILED;
                     swapChanged = true;
                 }
@@ -144,7 +148,7 @@ class BTCtoSolNewWrapper implements IBTCxtoSolWrapper {
         for(let paymentHash in this.swapData) {
             const swap = this.swapData[paymentHash];
 
-            if(swap.state===BTCtoSolNewSwapState.CLAIM_COMMITED) {
+            if(swap.state===BTCtoSolNewSwapState.CLAIM_COMMITED || swap.state===BTCtoSolNewSwapState.BTC_TX_CONFIRMED) {
                 //Check if it's already successfully paid
                 const commitStatus = await this.contract.getCommitStatus(swap.intermediary, swap.data);
                 if(commitStatus===BTCLNtoEVMCommitStatus.PAID) {
@@ -160,7 +164,7 @@ class BTCtoSolNewWrapper implements IBTCxtoSolWrapper {
                 if(commitStatus===BTCLNtoEVMCommitStatus.COMMITTED) {
                     //Check if payment already arrived
                     const tx = await ChainUtils.checkAddressTxos(swap.address, swap.getTxoHash());
-                    if(tx.tx.status.confirmed) {
+                    if(tx!=null && tx.tx.status.confirmed) {
                         const tipHeight = await ChainUtils.getTipBlockHeight();
                         const confirmations = tipHeight-tx.tx.status.block_height+1;
                         if(confirmations>=swap.data.confirmations) {

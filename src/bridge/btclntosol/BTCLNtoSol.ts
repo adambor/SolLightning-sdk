@@ -142,6 +142,11 @@ class BTCLNtoSol {
 
     }
 
+    static getOnchainSendTimeout(data: AtomicSwapStruct) {
+        const tsDelta = (ConstantBTCtoSol.blocksTillTxConfirms + data.confirmations) * Bitcoin.blockTime * ConstantBTCtoSol.safetyFactor;
+        return data.expiry.sub(new BN(tsDelta));
+    }
+
     async getCommitStatus(intermediary: PublicKey, data: AtomicSwapStruct): Promise<number> {
 
         const escrowStateKey = this.getEscrowStateKey(Buffer.from(data.paymentHash, "hex"));
@@ -424,7 +429,33 @@ class BTCLNtoSol {
 
         let jsonBody: any = await response.json();
 
-        const lockingScript = bitcoin.address.toOutputScript(jsonBody.data.btcAddress);
+        if(jsonBody.data.data.confirmations>ConstantBTCtoSol.maxConfirmations) {
+            throw new Error("Requires too many confirmations");
+        }
+
+        if(jsonBody.data.data.kind!=1) {
+            throw new Error("Invalid type of the swap");
+        }
+
+        const data: AtomicSwapStruct = {
+            intermediary: new PublicKey(jsonBody.data.data.intermediary),
+            token: new PublicKey(jsonBody.data.data.token),
+            amount: new BN(jsonBody.data.data.amount),
+            paymentHash: jsonBody.data.data.paymentHash,
+            expiry: new BN(jsonBody.data.data.expiry),
+            kind: jsonBody.data.data.kind,
+            confirmations: jsonBody.data.data.confirmations
+        };
+
+        //Check that we have enough time to send the TX and for it to confirm
+        const expiry = BTCLNtoSol.getOnchainSendTimeout(data);
+        const currentTimestamp = new BN(Math.floor(Date.now()/1000));
+
+        if(expiry.sub(currentTimestamp).lt(new BN(ConstantBTCtoSol.minSendWindow))) {
+            throw new Error("Send window too low");
+        }
+
+        const lockingScript = bitcoin.address.toOutputScript(jsonBody.data.btcAddress, ConstantBTCtoSol.network);
 
         const desiredHash = createHash("sha256").update(Buffer.concat([
             Buffer.from(new BN(0).toArray("le", 8)),
@@ -440,15 +471,7 @@ class BTCLNtoSol {
             address: jsonBody.data.btcAddress,
             swapFee: new BN(jsonBody.data.swapFee),
             intermediary: new PublicKey(jsonBody.data.address),
-            data: {
-                intermediary: new PublicKey(jsonBody.data.data.intermediary),
-                token: new PublicKey(jsonBody.data.data.token),
-                amount: new BN(jsonBody.data.data.amount),
-                paymentHash: jsonBody.data.data.paymentHash,
-                expiry: new BN(jsonBody.data.data.expiry),
-                kind: jsonBody.data.data.kind,
-                confirmations: jsonBody.data.data.confirmations
-            },
+            data,
             prefix: jsonBody.data.prefix,
             timeout: jsonBody.data.timeout,
             signature: jsonBody.data.signature,
@@ -809,8 +832,8 @@ class BTCLNtoSol {
             Buffer.from(data.amount.toArray("le", 8)),
             Buffer.from(data.expiry.toArray("le", 8)),
             Buffer.from(data.paymentHash, "hex"),
-            Buffer.from(new BN(0).toArray("le", 1)),
-            Buffer.from(new BN(0).toArray("le", 2)),
+            Buffer.from(new BN(data.kind || 0).toArray("le", 1)),
+            Buffer.from(new BN(data.confirmations || 0).toArray("le", 2)),
             Buffer.from(expiryTimestamp.toArray("le", 8)),
         ];
 
@@ -934,7 +957,11 @@ class BTCLNtoSol {
         const merkleProof = await ChainUtils.getTransactionProof(txId);
         const btcBlockhash = await ChainUtils.getBlockHash(merkleProof.block_height);
         const commitedHeader = await this.btcRelay.retrieveBlockLog(btcBlockhash, merkleProof.block_height+data.confirmations-1);
-        if(commitedHeader==null) throw new Error("BTC Relay not synchronized to required blockheight");
+
+        if(commitedHeader==null) {
+            //TODO: Try to sync the relay ourselves
+            throw new Error("BTC Relay not synchronized to required blockheight");
+        }
 
         const swapDataKey = this.getSwapDataKey(reversedTxId, data.intermediary);
 
@@ -964,19 +991,21 @@ class BTCLNtoSol {
             pointer += writeLen;
         }
 
-        const reversedMerkleProof: Buffer[] = merkleProof.merkle.map((e) => Buffer.from(e, "hex"));
+        const reversedMerkleProof: Buffer[] = merkleProof.merkle.map((e) => Buffer.from(e, "hex").reverse());
+
+        const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, data.intermediary);
 
         const verifyIx = await this.btcRelay.createVerifyIx(reversedTxId, data.confirmations, merkleProof.pos, reversedMerkleProof, commitedHeader);
         const claimIx = await this.program.methods
-            .claimerClaimWithExtData(reversedTxId)
+            .claimerClaimPayOutWithExtData(reversedTxId)
             .accounts({
                 signer: data.intermediary,
-                claimer: data.intermediary,
                 offerer: intermediary,
-                initializer: data.intermediary,
-                data: swapDataKey,
-                userData: this.getUserVaultKey(data.intermediary),
+                claimerReceiveTokenAccount: ata,
                 escrowState: this.getEscrowStateKey(Buffer.from(data.paymentHash, "hex")),
+                vault: this.vaultKey,
+                data: swapDataKey,
+                vaultAuthority: this.vaultAuthorityKey,
                 systemProgram: SystemProgram.programId,
                 ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY
             })

@@ -1,7 +1,7 @@
 import IBTCxtoSolSwap, {BTCxtoSolSwapState} from "../IBTCxtoSolSwap";
 import {PublicKey, SystemProgram, Transaction, TransactionSignature} from "@solana/web3.js";
 import {AnchorProvider, BN} from "@project-serum/anchor";
-import {AtomicSwapStruct} from "../btclntosol/BTCLNtoSol";
+import BTCLNtoSol, {AtomicSwapStruct} from "../btclntosol/BTCLNtoSol";
 import BTCtoSolWrapper from "../btctosol/BTCtoSolWrapper";
 import * as EventEmitter from "events";
 import SwapType from "../SwapType";
@@ -212,7 +212,16 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
      * Returns if the swap can be committed
      */
     canCommit(): boolean {
-        return this.state===BTCtoSolNewSwapState.PR_CREATED;
+        if(this.state!==BTCtoSolNewSwapState.PR_CREATED) {
+            return false;
+        }
+        const expiry = BTCLNtoSol.getOnchainSendTimeout(this.data);
+        const currentTimestamp = new BN(Math.floor(Date.now()/1000));
+
+        if(expiry.sub(currentTimestamp).lt(new BN(ConstantBTCtoSol.minSendWindow))) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -226,6 +235,14 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
     async commit(signer: AnchorProvider, noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<TransactionSignature> {
         if(this.state!==BTCtoSolNewSwapState.PR_CREATED) {
             throw new Error("Must be in PR_CREATED state!");
+        }
+
+        //Check that we have enough time to send the TX and for it to confirm
+        const expiry = BTCLNtoSol.getOnchainSendTimeout(this.data);
+        const currentTimestamp = new BN(Math.floor(Date.now()/1000));
+
+        if(expiry.sub(currentTimestamp).lt(new BN(ConstantBTCtoSol.minSendWindow))) {
+            throw new Error("Send window too low");
         }
 
         try {
@@ -326,10 +343,14 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
 
         for(let tx of signedTxs) {
             const txResult = await signer.connection.sendRawTransaction(tx.serialize());
+            console.log("Send tx: ", tx);
             await signer.connection.confirmTransaction(txResult, "confirmed");
+            console.log("Tx confirmed: ", txResult);
         }
 
         const txResult = await signer.connection.sendRawTransaction(lastTx.serialize());
+        console.log("Send final tx: ", lastTx);
+        console.log("Send final tx sig: ", txResult);
 
         if(!noWaitForConfirmation) {
             await this.waitTillClaimed(abortSignal);
@@ -397,7 +418,7 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
     }
 
     getPaymentHash(): Buffer {
-        return Buffer.from(this.data.paymentHash);
+        return Buffer.from(this.data.paymentHash, "hex");
     }
 
     getTxoHash(): Buffer {
@@ -423,6 +444,10 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
 
     getType(): SwapType {
         return SwapType.BTC_TO_SOL;
+    }
+
+    getTimeoutTime(): number {
+        return BTCLNtoSol.getOnchainSendTimeout(this.data).toNumber()*1000;
     }
 
 }

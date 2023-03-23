@@ -33,6 +33,10 @@ export const ConstantBTCtoSol = {
     fee: new BN("3000"),
     min: new BN("10000"),
     max: new BN("1000000"),
+    safetyFactor: 2,
+    blocksTillTxConfirms: 12,
+    maxConfirmations: 6,
+    minSendWindow: 30*60,
     refundGracePeriod: 10*60,
     authorizationGracePeriod: 5*60,
     network: bitcoin.networks.testnet
@@ -40,5 +44,6 @@ export const ConstantBTCtoSol = {
 
 export const Bitcoin = {
     satsMultiplier: new BN("100000000"),
+    blockTime: 10*60,
     wbtcToken: new PublicKey("Ag6gw668H9PLQFyP482whvGDoAseBWfgs5AfXCAK3aMj")
 };

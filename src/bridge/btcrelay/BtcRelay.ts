@@ -1,6 +1,6 @@
 import {AnchorProvider, BorshCoder, EventParser, Program} from "@project-serum/anchor";
 import {programIdl} from "./program/programIdl";
-import {PublicKey, Signer, TransactionInstruction} from "@solana/web3.js";
+import {PublicKey, TransactionInstruction} from "@solana/web3.js";
 
 const LOG_FETCH_LIMIT = 500;
 
@@ -22,6 +22,7 @@ export type StoredHeader = {
 }
 
 const HEADER_SEED = "header";
+const FORK_SEED = "fork";
 const BTC_RELAY_STATE_SEED = "state";
 
 export default class BtcRelay {
@@ -32,6 +33,7 @@ export default class BtcRelay {
     eventParser: EventParser;
     BtcRelayMainState: PublicKey;
     BtcRelayHeader: (hash: Buffer) => PublicKey;
+    BtcRelayFork: (forkId: number, pubkey: PublicKey) => PublicKey;
 
     constructor(provider: AnchorProvider) {
         this.provider = provider;
@@ -49,6 +51,15 @@ export default class BtcRelay {
             [Buffer.from(HEADER_SEED), hash],
             this.program.programId
         )[0];
+
+        this.BtcRelayFork = (forkId: number, pubkey: PublicKey) => {
+            const buff = Buffer.alloc(8);
+            buff.writeBigUint64LE(BigInt(forkId));
+            return PublicKey.findProgramAddressSync(
+                [Buffer.from(FORK_SEED), buff, pubkey.toBuffer()],
+                this.program.programId
+            )[0];
+        }
     }
 
 

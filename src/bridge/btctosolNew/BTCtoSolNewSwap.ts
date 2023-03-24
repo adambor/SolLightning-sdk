@@ -321,7 +321,7 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
      * Claims and finishes the swap once it was successfully committed on-chain with commit()
      *
      * @param signer                    Signer to use to send the claim transaction
-     * @param noWaitForConfirmation     Do not wait for transaction confirmation (careful! be sure that transaction confirms before calling claim())
+     * @param noWaitForConfirmation     Do not wait for transaction confirmation
      * @param abortSignal               Abort signal
      */
     async claim(signer: AnchorProvider, noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<TransactionSignature> {
@@ -338,6 +338,9 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
         }
         //Maybe don't wait for TX but instead subscribe to logs, this would improve the experience when user speeds up the transaction by replacing it.
         const signedTxs = await signer.wallet.signAllTransactions(claimTxs);
+
+        //TODO: Any of these transactions may fail, due to other relayers syncing the blockchain themselves, or watchtowers claiming the swap for us,
+        // however this doesn't mean that the claim request actually failed, should take it into account
 
         const lastTx = signedTxs.pop();
 

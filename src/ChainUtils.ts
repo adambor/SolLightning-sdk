@@ -51,26 +51,59 @@ export type BitcoinTransaction = {
 };
 
 export type BlockData = {
-    height: number,
-    hash: string,
-    timestamp: number,
-    median_timestamp: number,
-    previous_block_hash: string,
-    difficulty: string,
-    header: string,
-    version: number,
     bits: number,
+    difficulty: number,
+    extras: any,
+    height: number,
+    id: string,
+    mediantime: number,
+    merkle_root: string,
     nonce: number,
+    previousblockhash: string,
+    size: number,
+    timestamp: number,
+    tx_count: number,
+    version: number,
+    weight: number
+}
+
+// export type BlockData = {
+//     height: number,
+//     hash: string,
+//     timestamp: number,
+//     median_timestamp: number,
+//     previousblockhash: string,
+//     difficulty: string,
+//     header: string,
+//     version: number,
+//     bits: number,
+//     nonce: number,
+//     size: number,
+//     weight: number,
+//     tx_count: number,
+//     merkle_root: string,
+//     reward: number,
+//     total_fee_amt: number,
+//     avg_fee_amt: number,
+//     median_fee_amt: number,
+//     avg_fee_rate: number,
+//     median_fee_rate: number
+// };
+
+export type BitcoinBlockHeader = {
+    id: string,
+    height: number,
+    version: number,
+    timestamp: number,
+    tx_count: number,
     size: number,
     weight: number,
-    tx_count: number,
     merkle_root: string,
-    reward: number,
-    total_fee_amt: number,
-    avg_fee_amt: number,
-    median_fee_amt: number,
-    avg_fee_rate: number,
-    median_fee_rate: number
+    previousblockhash: string,
+    mediantime: number,
+    nonce: number,
+    bits: number,
+    difficulty: number
 };
 
 class ChainUtils {
@@ -234,6 +267,26 @@ class ChainUtils {
 
     }
 
+    static async getTipBlockHash(): Promise<string> {
+
+        const response: Response = await fetch(url+"blocks/tip/hash", {
+            method: "GET"
+        });
+
+        if(response.status!==200) {
+            let resp: string;
+            try {
+                resp = await response.text();
+            } catch (e) {
+                throw new Error(response.statusText);
+            }
+            throw new Error(resp);
+        }
+
+        let blockHash: any = await response.text();
+
+        return blockHash;
+    }
 
     static async getTipBlockHeight() : Promise<number> {
 
@@ -256,6 +309,50 @@ class ChainUtils {
         const blockheight = parseInt(respText);
 
         return blockheight;
+
+    }
+
+    static async getBlock(blockhash: string): Promise<BitcoinBlockHeader> {
+
+        const response: Response = await fetch(url+"block/"+blockhash, {
+            method: "GET"
+        });
+
+        if(response.status!==200) {
+            let resp: string;
+            try {
+                resp = await response.text();
+            } catch (e) {
+                throw new Error(response.statusText);
+            }
+            throw new Error(resp);
+        }
+
+        let jsonBody: any = await response.json();
+
+        return jsonBody;
+
+    }
+
+    static async getBlockStatus(blockhash: string): Promise<{in_best_chain: boolean, height: number, next_best: string}> {
+
+        const response: Response = await fetch(url+"block/"+blockhash+"/status", {
+            method: "GET"
+        });
+
+        if(response.status!==200) {
+            let resp: string;
+            try {
+                resp = await response.text();
+            } catch (e) {
+                throw new Error(response.statusText);
+            }
+            throw new Error(resp);
+        }
+
+        let jsonBody: any = await response.json();
+
+        return jsonBody;
 
     }
 
@@ -307,15 +404,9 @@ class ChainUtils {
 
     }
 
-    /**
-     * Returns the blocks between startHeight and endHeight, max delta is 10
-     *
-     * @param startHeight       Start height, inclusive
-     * @param endHeight         End height, inclusive
-     */
-    static async getBlocks(startHeight: number, endHeight: number) : Promise<BlockData[]> {
+    static async getPast15Blocks(endHeight: number) : Promise<BlockData[]> {
 
-        const response: Response = await fetch(url+"v1/blocks-bulk/"+startHeight+"/"+endHeight, {
+        const response: Response = await fetch(url+"v1/blocks/"+endHeight, {
             method: "GET"
         });
 
@@ -330,6 +421,10 @@ class ChainUtils {
         }
 
         let jsonBody: any = await response.json();
+
+        jsonBody.forEach(e => {
+            e.hash = e.id;
+        });
 
         return jsonBody;
 

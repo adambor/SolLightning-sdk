@@ -62,6 +62,68 @@ export default class BtcRelay {
         }
     }
 
+    async retrieveBlockLogAndBlockheight(blockhash: string): Promise<{
+        header: StoredHeader,
+        height: number
+    }> {
+        let storedHeader: any = null;
+
+        let lastSignature = null;
+
+        const mainState: any = await this.program.account.mainState.fetch(this.BtcRelayMainState);
+
+        const storedCommitments = new Set();
+        mainState.blockCommitments.forEach(e => {
+            storedCommitments.add(Buffer.from(e).toString("hex"));
+        });
+
+        const blockHashBuffer = Buffer.from(blockhash, 'hex').reverse();
+        const topicKey = this.BtcRelayHeader(blockHashBuffer);
+
+        while(storedHeader==null) {
+            let fetched;
+            if(lastSignature==null) {
+                fetched = await this.provider.connection.getSignaturesForAddress(topicKey, {
+                    limit: LOG_FETCH_LIMIT
+                }, "confirmed");
+            } else {
+                fetched = await this.provider.connection.getSignaturesForAddress(topicKey, {
+                    before: lastSignature,
+                    limit: LOG_FETCH_LIMIT
+                }, "confirmed");
+            }
+            if(fetched.length===0) break;
+            lastSignature = fetched[fetched.length-1].signature;
+            for(let data of fetched) {
+                const tx = await this.provider.connection.getTransaction(data.signature, {
+                    commitment: "confirmed"
+                });
+                if(tx.meta.err) continue;
+
+                const events = this.eventParser.parseLogs(tx.meta.logMessages);
+
+                for(let log of events) {
+                    if(log.name==="StoreFork" || log.name==="StoreHeader") {
+                        const logData: any = log.data;
+                        if(blockHashBuffer.equals(Buffer.from(logData.blockHash))) {
+                            const commitHash = Buffer.from(logData.commitHash).toString("hex");
+                            if(storedCommitments.has(commitHash)) {
+                                storedHeader = log.data.header;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if(storedHeader!=null) break;
+            }
+        }
+
+        return {
+            header: storedHeader,
+            height: mainState.blockHeight
+        };
+    }
 
     async retrieveBlockLog(blockhash: string, requiredBlockheight: number): Promise<StoredHeader> {
         //Retrieve the log

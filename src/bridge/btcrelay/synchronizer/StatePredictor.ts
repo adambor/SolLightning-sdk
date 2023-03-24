@@ -2,6 +2,14 @@ import {Header, StoredHeader} from "../BtcRelay";
 
 const DIFF_ADJUSTMENT_PERIOD = 2016;
 
+export function gtBuffer(a: Buffer, b: Buffer): boolean {
+    for(let i=0;i<a.length;i++) {
+        if(a[i]>b[i]) return true;
+        if(a[i]<b[i]) return false;
+    }
+    return false;
+}
+
 function divInPlace(arr: Buffer, divisor: number): void {
 
     let remainder = 0;
@@ -15,7 +23,7 @@ function divInPlace(arr: Buffer, divisor: number): void {
 
 }
 
-function addInPlace(arr: Buffer, add: Buffer): void {
+function addInPlace(arr: number[], add: number[]): void {
 
     let remainder = 0;
 
@@ -87,31 +95,27 @@ function getDifficulty(nbits: number): Buffer {
 
 }
 
-export function computeCommitedHeader(initialCommitedHeader: StoredHeader, submittedHeaders: Header[]) {
+export function computeCommitedHeader(initialCommitedHeader: StoredHeader, header: Header) {
 
     const committedHeader = {...initialCommitedHeader};
 
     committedHeader.chainWork = [...committedHeader.chainWork];
     committedHeader.prevBlockTimestamps = [...committedHeader.prevBlockTimestamps];
 
-    for(let header of submittedHeaders) {
+    committedHeader.blockheight++;
 
-        committedHeader.blockheight++;
-
-        for(let i=1;i<10;i++) {
-            committedHeader.prevBlockTimestamps[i-1] = committedHeader.prevBlockTimestamps[i];
-        }
-        committedHeader.prevBlockTimestamps[9] = committedHeader.header.timestamp;
-
-        if(committedHeader.blockheight % DIFF_ADJUSTMENT_PERIOD === 0) {
-            committedHeader.lastDiffAdjustment = header.timestamp;
-        }
-
-        addInPlace(Buffer.from(committedHeader.chainWork), getDifficulty(header.nbits));
-
-        committedHeader.header = header;
-
+    for(let i=1;i<10;i++) {
+        committedHeader.prevBlockTimestamps[i-1] = committedHeader.prevBlockTimestamps[i];
     }
+    committedHeader.prevBlockTimestamps[9] = committedHeader.header.timestamp;
+
+    if(committedHeader.blockheight % DIFF_ADJUSTMENT_PERIOD === 0) {
+        committedHeader.lastDiffAdjustment = header.timestamp;
+    }
+
+    addInPlace(committedHeader.chainWork, [...getDifficulty(header.nbits)]);
+
+    committedHeader.header = header;
 
     return committedHeader;
 

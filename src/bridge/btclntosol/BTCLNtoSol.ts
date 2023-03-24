@@ -22,6 +22,7 @@ import {ECPairAPI, ECPairFactory, TinySecp256k1Interface} from 'ecpair';
 import * as tinysecp from "tiny-secp256k1";
 import ChainUtils from "../../ChainUtils";
 import BtcRelay from "../btcrelay/BtcRelay";
+import BtcRelaySynchronizer from "../btcrelay/synchronizer/BtcRelaySynchronizer";
 const ECPair: ECPairAPI = ECPairFactory(tinysecp);
 
 const timeoutPromise = (timeoutSeconds) => {
@@ -88,11 +89,13 @@ class BTCLNtoSol {
     vaultKey: PublicKey;
 
     btcRelay: BtcRelay;
+    btcRelaySynchronizer: BtcRelaySynchronizer;
 
     constructor(provider: AnchorProvider, wbtcToken: PublicKey) {
         this.provider = provider;
         this.WBTC_ADDRESS = wbtcToken;
         this.btcRelay = new BtcRelay(provider);
+        this.btcRelaySynchronizer = new BtcRelaySynchronizer(this.provider, this.btcRelay);
         this.program = new Program(programIdl, programIdl.metadata.address, this.provider);
         this.vaultAuthorityKey = PublicKey.findProgramAddressSync(
             [Buffer.from(AUTHORITY_SEED)],
@@ -956,16 +959,29 @@ class BTCLNtoSol {
 
         const merkleProof = await ChainUtils.getTransactionProof(txId);
         const btcBlockhash = await ChainUtils.getBlockHash(merkleProof.block_height);
-        const commitedHeader = await this.btcRelay.retrieveBlockLog(btcBlockhash, merkleProof.block_height+data.confirmations-1);
 
-        if(commitedHeader==null) {
-            //TODO: Try to sync the relay ourselves
-            throw new Error("BTC Relay not synchronized to required blockheight");
-        }
+        const btcRelayResponse = await this.btcRelay.retrieveBlockLogAndBlockheight(btcBlockhash);
 
-        const swapDataKey = this.getSwapDataKey(reversedTxId, data.intermediary);
+        const requiredBlockheight = merkleProof.block_height+data.confirmations-1;
 
         const txs: Transaction[] = [];
+
+        let commitedHeader = btcRelayResponse.header;
+        if(btcRelayResponse.height<requiredBlockheight) {
+            //Need to synchronize
+            const resp = await this.btcRelaySynchronizer.syncToLatestTxs();
+            resp.txs.forEach(tx => txs.push(tx));
+            console.log("BTC Relay not synchronized to required blockheight, synchronizing ourselves in "+resp.txs.length+" txs");
+            console.log("BTC Relay computed header map: ",resp.computedHeaderMap);
+            if(commitedHeader==null) {
+                //Retrieve computed header
+                commitedHeader = resp.computedHeaderMap[merkleProof.block_height];
+            }
+        }
+
+        console.log("Target commit header ", commitedHeader);
+
+        const swapDataKey = this.getSwapDataKey(reversedTxId, data.intermediary);
 
         const fetchedDataAccount = await this.getData(swapDataKey);
         if(fetchedDataAccount!=null) {

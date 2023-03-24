@@ -85,21 +85,27 @@ if(!result) {
 ```javascript
 //Create the swap
 const swap = await swapper.createBTCtoSolSwap(_amount);
+const amountToBePaidOnBitcoin = swap.getInAmount(); //The amount received MUST match
+const amountToBeReceivedOnSolana = swap.getOutAmount(); //Get the amount we will receive on Solana
+const fee = swap.getFee();
+
+//Once client is happy with the fee
+await swap.commit(anchorProvider);
+
 //Get the bitcoin address and amount required to be sent to that bitcoin address
 const receivingAddressOnBitcoin = swap.getAddress();
-const amountToBePaidOnBitcoin = swap.getInAmount(); //The amount received MUST match
 //Get the QR code (contains the address and amount)
 const qrCodeData = swap.getQrData(); //Data that can be displayed in the form of QR code
-//Get the amount we will receive on Solana
-const amountToBeReceivedOnSolana = swap.getOutAmount();
-const fee = swap.getFee();
+//Get the timeout (in UNIX millis), the transaction should be made in under this timestamp, and with high enough fee for the transaction to confirm quickly
+const expiryTime = swap.getTimeoutTime();
+
 try {
     //Wait for the payment to arrive
-    await swap.waitForPayment(null, null, (txId: string, confirmations: number, targetConfirmations: number, amount: BN, totalFee: BN, received: BN) => {
+    await swap.waitForPayment(null, null, (txId: string, confirmations: number, targetConfirmations: number) => {
         //Updates about the swap state, txId, current confirmations of the transaction, required target confirmations, amount of the transaction received, updated totalFee (as on-chain fees may change), and resulting amount of token received.
     });
     //Claim the swap funds
-    await swap.commitAndClaim(anchorProvider);
+    await swap.claim(anchorProvider);
 } catch(e) {
     //Error occurred while waiting for payment
 }

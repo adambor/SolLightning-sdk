@@ -201,7 +201,9 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
 
         this.txId = result.tx.txid;
         this.vout = result.vout;
-        this.state = BTCtoSolNewSwapState.BTC_TX_CONFIRMED;
+        if(this.state<BTCtoSolNewSwapState.BTC_TX_CONFIRMED) {
+            this.state = BTCtoSolNewSwapState.BTC_TX_CONFIRMED;
+        }
 
         await this.save();
 

@@ -19,9 +19,7 @@ export const ConstantBTCLNtoSol = {
 };
 
 export const ConstantSoltoBTC = {
-    baseFee: new BN("10"),
-    fee: new BN("3000"),
-    min: new BN("5000"),
+    min: new BN("10000"),
     max: new BN("1000000"),
     refundGracePeriod: 10*60,
     authorizationGracePeriod: 5*60,
@@ -29,8 +27,6 @@ export const ConstantSoltoBTC = {
 };
 
 export const ConstantBTCtoSol = {
-    baseFee: new BN("10"),
-    fee: new BN("3000"),
     min: new BN("10000"),
     max: new BN("1000000"),
     safetyFactor: 2,

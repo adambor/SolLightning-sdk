@@ -131,6 +131,8 @@ class SoltoBTCLNWrapper implements ISolToBTCxWrapper {
             if(event.name==="ClaimEvent") {
                 if(swap.state===SolToBTCxSwapState.CREATED || swap.state===SolToBTCxSwapState.COMMITED || swap.state===SolToBTCxSwapState.REFUNDABLE) {
                     swap.state = SolToBTCxSwapState.CLAIMED;
+                    const secret = Buffer.from(event.data.secret);
+                    swap.secret = secret.toString("hex");
                     swapChanged = true;
                 }
             }

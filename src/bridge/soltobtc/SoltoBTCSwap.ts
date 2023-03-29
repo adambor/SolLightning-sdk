@@ -20,19 +20,18 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
     readonly address: string;
     readonly amount: BN;
     readonly confirmationTarget: number;
-    readonly confirmations: number;
-    readonly nonce: BN;
 
     readonly networkFee: BN;
     readonly swapFee: BN;
     readonly totalFee: BN;
-    readonly total: BN;
-    readonly minRequiredExpiry: BN;
-
-    readonly offerExpiry: number;
 
     //State: PR_PAID
     data: PaymentRequestStruct;
+
+    prefix: string;
+    timeout: string;
+    signature: string;
+    nonce: number;
 
     txId: string;
 
@@ -51,15 +50,14 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
         address: string,
         amount: BN,
         confirmationTarget: number,
-        confirmations: number,
-        nonce: BN,
         networkFee: BN,
         swapFee: BN,
         totalFee: BN,
-        total: BN,
-        minRequiredExpiry: BN,
-        offerExpiry: number,
         data: PaymentRequestStruct,
+        prefix: string,
+        timeout: string,
+        signature: string,
+        nonce: number,
         url: string,
         fromAddress: PublicKey
     );
@@ -70,15 +68,14 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
         addressOrObject: string | any,
         amount?: BN,
         confirmationTarget?: number,
-        confirmations?: number,
-        nonce?: BN,
         networkFee?: BN,
         swapFee?: BN,
         totalFee?: BN,
-        total?: BN,
-        minRequiredExpiry?: BN,
-        offerExpiry?: number,
         data?: PaymentRequestStruct,
+        prefix?: string,
+        timeout?: string,
+        signature?: string,
+        nonce?: number,
         url?: string,
         fromAddress?: PublicKey
     ) {
@@ -93,14 +90,14 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
             this.address = addressOrObject;
             this.amount = amount;
             this.confirmationTarget = confirmationTarget;
-            this.confirmations = confirmations;
-            this.nonce = nonce;
             this.networkFee = networkFee;
             this.swapFee = swapFee;
             this.totalFee = totalFee;
-            this.total = total;
-            this.minRequiredExpiry = minRequiredExpiry;
-            this.offerExpiry = offerExpiry;
+
+            this.prefix = prefix;
+            this.timeout = timeout;
+            this.signature = signature;
+            this.nonce = nonce;
 
             this.data = data;
         } else {
@@ -112,22 +109,26 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
             this.address = addressOrObject.address;
             this.amount = new BN(addressOrObject.amount);
             this.confirmationTarget = addressOrObject.confirmationTarget;
-            this.confirmations = addressOrObject.confirmations;
-            this.nonce = new BN(addressOrObject.nonce);
             this.networkFee = new BN(addressOrObject.networkFee);
             this.swapFee = new BN(addressOrObject.swapFee);
             this.totalFee = new BN(addressOrObject.totalFee);
-            this.total = new BN(addressOrObject.total);
-            this.minRequiredExpiry = new BN(addressOrObject.minRequiredExpiry);
-            this.offerExpiry = addressOrObject.offerExpiry;
             this.txId = addressOrObject.txId;
             this.data = addressOrObject.data !=null ? {
                 intermediary: new PublicKey(addressOrObject.data.intermediary),
                 token: new PublicKey(addressOrObject.data.token),
                 amount: new BN(addressOrObject.data.amount),
                 paymentHash: addressOrObject.data.paymentHash,
-                expiry: new BN(addressOrObject.data.expiry)
+                expiry: new BN(addressOrObject.data.expiry),
+                nonce: addressOrObject.data.nonce==null ? null : new BN(addressOrObject.data.nonce),
+                kind: addressOrObject.data.kind,
+                confirmations: addressOrObject.data.confirmations,
+                payOut: addressOrObject.data.payOut,
             } : null;
+
+            this.prefix = addressOrObject.prefix;
+            this.timeout = addressOrObject.timeout;
+            this.signature = addressOrObject.signature;
+            this.nonce = addressOrObject.nonce;
         }
     }
 
@@ -135,7 +136,7 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
      * Returns amount that will be sent on Solana
      */
     getInAmount(): BN {
-        return this.data.amount || this.total;
+        return this.data.amount;
     }
 
     /**
@@ -157,7 +158,7 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
      */
     canCommit(): boolean {
         return this.state===SolToBTCxSwapState.CREATED &&
-            ((this.offerExpiry-ConstantSoltoBTC.authorizationGracePeriod) > Date.now()/1000);
+            ((parseInt(this.timeout)-ConstantSoltoBTC.authorizationGracePeriod) > Date.now()/1000);
     }
 
     /**
@@ -172,13 +173,16 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
             throw new Error("Must be in CREATED state!");
         }
 
-        if((this.offerExpiry-ConstantSoltoBTC.authorizationGracePeriod) < Date.now()/1000) {
-            throw new Error("Expired");
+        try {
+            await this.wrapper.contract.isValidInitAuthorization(this.data, this.prefix, this.timeout, this.signature, this.nonce);
+        } catch (e) {
+            console.error(e);
+            throw new Error("Expired, please retry");
         }
 
-        const tx = await this.wrapper.contract.createChainPayTx(this.fromAddress, this.data, this.confirmations, this.nonce);
+        const tx = await this.wrapper.contract.createPayTx(this.fromAddress, this.data, this.prefix, this.timeout, this.signature, this.nonce);
 
-        const {blockhash} = await signer.connection.getRecentBlockhash();
+        const {blockhash, lastValidBlockHeight} = await signer.connection.getLatestBlockhash();
         tx.recentBlockhash = blockhash;
         tx.feePayer = signer.wallet.publicKey;
         //Maybe don't wait for TX but instead subscribe to logs, this would improve the experience when user speeds up the transaction by replacing it.
@@ -188,7 +192,17 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
         });
 
         if(!noWaitForConfirmation) {
-            await this.waitTillCommited(abortSignal);
+            await signer.connection.confirmTransaction({
+                signature: txResult,
+                blockhash: blockhash,
+                lastValidBlockHeight,
+                abortSignal
+            }, "confirmed");
+
+            this.state = SolToBTCxSwapState.COMMITED;
+            await this.save();
+            this.emitEvent();
+
             return txResult;
         }
 
@@ -232,7 +246,7 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
      * @returns {Promise<boolean>}  Was the payment successful? If not we can refund.
      */
     async waitForPayment(abortSignal?: AbortSignal, checkIntervalSeconds?: number): Promise<boolean> {
-        const result = await this.wrapper.contract.waitForRefundAuthorization(this.fromAddress, this.data, this.url, abortSignal, checkIntervalSeconds, this.nonce);
+        const result = await this.wrapper.contract.waitForRefundAuthorization(this.fromAddress, this.data, this.url, abortSignal, checkIntervalSeconds);
 
         if(abortSignal.aborted) throw new Error("Aborted");
 
@@ -340,22 +354,25 @@ export default class SoltoBTCSwap implements ISolToBTCxSwap {
             address: this.address,
             amount: this.amount.toString(10),
             confirmationTarget: this.confirmationTarget,
-            confirmations: this.confirmations,
-            nonce: this.nonce.toString(10),
             networkFee: this.networkFee.toString(10),
             swapFee: this.swapFee.toString(10),
             totalFee: this.totalFee.toString(10),
-            total: this.total.toString(10),
-            minRequiredExpiry: this.minRequiredExpiry.toString(10),
-            offerExpiry: this.offerExpiry,
             txId: this.txId,
             data: this.data!=null ? {
                 intermediary: this.data.intermediary.toBase58(),
                 token: this.data.token.toBase58(),
                 amount: this.data.amount.toString(10),
                 paymentHash: this.data.paymentHash,
-                expiry: this.data.expiry.toString(10)
+                expiry: this.data.expiry.toString(10),
+                nonce: this.data.nonce==null ? null : this.data.nonce.toString(10),
+                kind: this.data.kind,
+                confirmations: this.data.confirmations,
+                payOut: this.data.payOut,
             } : null,
+            prefix: this.prefix,
+            timeout: this.timeout,
+            signature: this.signature,
+            nonce: this.nonce
         };
     }
 

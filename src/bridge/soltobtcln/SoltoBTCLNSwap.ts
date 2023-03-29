@@ -21,6 +21,11 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
     //State: PR_PAID
     data: PaymentRequestStruct;
 
+    prefix: string;
+    timeout: string;
+    signature: string;
+    nonce: number;
+
     secret: string;
 
     readonly wrapper: SoltoBTCLNWrapper;
@@ -33,10 +38,32 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
      */
     readonly events: EventEmitter;
 
-    constructor(wrapper: SoltoBTCLNWrapper, pr: string, data: PaymentRequestStruct, url: string, fromAddress: PublicKey, confidence: string);
+    constructor(
+        wrapper: SoltoBTCLNWrapper,
+        pr: string,
+        data: PaymentRequestStruct,
+        prefix: string,
+        timeout: string,
+        signature: string,
+        nonce: number,
+        url: string,
+        fromAddress: PublicKey,
+        confidence: string
+    );
     constructor(wrapper: SoltoBTCLNWrapper, obj: any);
 
-    constructor(wrapper: SoltoBTCLNWrapper, prOrObject: string | any, data?: PaymentRequestStruct, url?: string, fromAddress?: PublicKey, confidence?: string) {
+    constructor(
+        wrapper: SoltoBTCLNWrapper,
+        prOrObject: string | any,
+        data?: PaymentRequestStruct,
+        prefix?: string,
+        timeout?: string,
+        signature?: string,
+        nonce?: number,
+        url?: string,
+        fromAddress?: PublicKey,
+        confidence?: string,
+    ) {
         this.wrapper = wrapper;
         this.events = new EventEmitter();
         if(typeof(prOrObject)==="string") {
@@ -48,6 +75,11 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
 
             this.pr = prOrObject;
             this.data = data;
+
+            this.prefix = prefix;
+            this.timeout = timeout;
+            this.signature = signature;
+            this.nonce = nonce;
         } else {
             this.state = prOrObject.state;
 
@@ -64,8 +96,17 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
                 token: new PublicKey(prOrObject.data.token),
                 amount: new BN(prOrObject.data.amount),
                 paymentHash: prOrObject.data.paymentHash,
-                expiry: new BN(prOrObject.data.expiry)
+                expiry: new BN(prOrObject.data.expiry),
+                nonce: prOrObject.data.nonce==null ? null : new BN(prOrObject.data.nonce),
+                kind: prOrObject.data.kind,
+                confirmations: prOrObject.data.confirmations,
+                payOut: prOrObject.data.payOut,
             } : null;
+
+            this.prefix = prOrObject.prefix;
+            this.timeout = prOrObject.timeout;
+            this.signature = prOrObject.signature;
+            this.nonce = prOrObject.nonce;
         }
     }
 
@@ -110,9 +151,16 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
             throw new Error("Must be in CREATED state!");
         }
 
-        const tx = await this.wrapper.contract.createPayTx(this.fromAddress, this.data);
+        try {
+            await this.wrapper.contract.isValidInitAuthorization(this.data, this.prefix, this.timeout, this.signature, this.nonce);
+        } catch (e) {
+            console.error(e);
+            throw new Error("Expired, please retry");
+        }
 
-        const {blockhash} = await signer.connection.getRecentBlockhash();
+        const tx = await this.wrapper.contract.createPayTx(this.fromAddress, this.data, this.prefix, this.timeout, this.signature, this.nonce);
+
+        const {blockhash, lastValidBlockHeight} = await signer.connection.getLatestBlockhash();
         tx.recentBlockhash = blockhash;
         tx.feePayer = signer.wallet.publicKey;
         //Maybe don't wait for TX but instead subscribe to logs, this would improve the experience when user speeds up the transaction by replacing it.
@@ -122,7 +170,17 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
         });
 
         if(!noWaitForConfirmation) {
-            await this.waitTillCommited(abortSignal);
+            await signer.connection.confirmTransaction({
+                signature: txResult,
+                blockhash: blockhash,
+                lastValidBlockHeight,
+                abortSignal
+            }, "confirmed");
+
+            this.state = SolToBTCxSwapState.COMMITED;
+            await this.save();
+            this.emitEvent();
+
             return txResult;
         }
 
@@ -279,8 +337,16 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
                 token: this.data.token.toBase58(),
                 amount: this.data.amount.toString(10),
                 paymentHash: this.data.paymentHash,
-                expiry: this.data.expiry.toString(10)
+                expiry: this.data.expiry.toString(10),
+                nonce: this.data.nonce==null ? null : this.data.nonce.toString(10),
+                kind: this.data.kind,
+                confirmations: this.data.confirmations,
+                payOut: this.data.payOut,
             } : null,
+            prefix: this.prefix,
+            timeout: this.timeout,
+            signature: this.signature,
+            nonce: this.nonce
         };
     }
 

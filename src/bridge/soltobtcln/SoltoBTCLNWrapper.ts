@@ -76,7 +76,18 @@ class SoltoBTCLNWrapper implements ISolToBTCxWrapper {
 
         const result = await this.contract.payBOLT11PaymentRequest(bolt11PayRequest, expirySeconds, fee, url);
 
-        const swap = new SoltoBTCLNSwap(this, bolt11PayRequest, result.data, url, this.provider.wallet.publicKey, result.confidence);
+        const swap = new SoltoBTCLNSwap(
+            this,
+            bolt11PayRequest,
+            result.data,
+            result.prefix,
+            result.timeout,
+            result.signature,
+            result.nonce,
+            url,
+            this.provider.wallet.publicKey,
+            result.confidence,
+        );
 
         await swap.save();
         this.swapData[result.data.paymentHash] = swap;

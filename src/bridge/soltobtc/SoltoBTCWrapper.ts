@@ -69,15 +69,14 @@ class SoltoBTCWrapper implements ISolToBTCxWrapper {
             address,
             amount,
             confirmationTarget,
-            confirmations,
-            result.nonce,
             result.networkFee,
             result.swapFee,
             result.totalFee,
-            result.total,
-            result.minRequiredExpiry,
-            result.offerExpiry,
             result.data,
+            result.prefix,
+            result.timeout,
+            result.signature,
+            result.nonce,
             url,
             this.provider.wallet.publicKey
         );
@@ -196,7 +195,7 @@ class SoltoBTCWrapper implements ISolToBTCxWrapper {
                 const res = await this.contract.getCommitStatus(swap.fromAddress, swap.data);
                 if(res===PaymentRequestStatus.PAYING) {
                     //Check if that maybe already concluded
-                    const refundAuth = await this.contract.getRefundAuthorization(swap.fromAddress, swap.data, swap.url, swap.nonce);
+                    const refundAuth = await this.contract.getRefundAuthorization(swap.fromAddress, swap.data, swap.url);
                     if(refundAuth!=null) {
                         if(!refundAuth.is_paid) {
                             swap.state = SolToBTCxSwapState.REFUNDABLE;

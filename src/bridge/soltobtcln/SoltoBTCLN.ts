@@ -18,6 +18,7 @@ import {Bitcoin, ConstantSoltoBTC, ConstantSoltoBTCLN} from "../../Constants";
 import * as bitcoin from "bitcoinjs-lib";
 import {createHash, randomBytes} from "crypto-browserify";
 import ChainUtils, {BitcoinTransaction} from "../../ChainUtils";
+import {AtomicSwapStruct} from "../btclntosol/BTCLNtoSol";
 
 const timeoutPromise = (timeoutSeconds) => {
     return new Promise(resolve => {
@@ -30,7 +31,11 @@ export type PaymentRequestStruct = {
     token: PublicKey,
     amount: BN,
     paymentHash: string,
-    expiry: BN
+    expiry: BN,
+    nonce?: BN,
+    kind?: number,
+    confirmations?: number,
+    payOut?: boolean
 };
 
 export const PaymentRequestStatus = {
@@ -130,6 +135,54 @@ class SoltoBTCLN {
             Buffer.from(data.paymentHash, "hex"),
             Buffer.from(expiryTimestamp.toArray("le", 8)),
         ];
+
+        const signatureBuffer = Buffer.from(signature, "hex");
+        const messageBuffer = Buffer.concat(messageBuffers);
+
+        if(!sign.detached.verify(messageBuffer, signatureBuffer, data.intermediary.toBuffer())) {
+            throw new Error("Invalid signature!");
+        }
+
+        return messageBuffer;
+
+    }
+
+    async isValidInitAuthorization(data: PaymentRequestStruct, prefix: string, timeout: string, signature: string, nonce: number): Promise<Buffer> {
+
+        const expiryTimestamp = new BN(timeout);
+        const currentTimestamp = new BN(Math.floor(Date.now() / 1000));
+
+        const isExpired = expiryTimestamp.sub(currentTimestamp).lt(new BN(ConstantSoltoBTCLN.authorizationGracePeriod));
+
+        if (isExpired) {
+            throw new Error("Authorization expired!");
+        }
+
+        //Check correctness of nonce
+        const userAccount: any = await this.program.account.userAccount.fetch(this.getUserVaultKey(data.intermediary));
+
+        if(nonce<=userAccount.claimNonce.toNumber()) {
+            throw new Error("Invalid nonce!");
+        }
+
+        const messageBuffers = [
+            Buffer.from(prefix, "ascii"),
+            Buffer.from(new BN(nonce).toArray("le", 8)),
+            data.token.toBuffer(),
+            Buffer.from(data.amount.toArray("le", 8)),
+            Buffer.from(data.expiry.toArray("le", 8)),
+            Buffer.from(data.paymentHash, "hex"),
+            Buffer.from([data.kind]),
+            Buffer.from(new BN(data.confirmations).toArray("le", 2)),
+            Buffer.from(expiryTimestamp.toArray("le", 8)),
+        ];
+        if(data.payOut) {
+            const ata = getAssociatedTokenAddressSync(data.token, data.intermediary);
+            messageBuffers.push(Buffer.alloc(1, 1));
+            messageBuffers.push(ata.toBuffer())
+        } else {
+            messageBuffers.push(Buffer.alloc(1, 0));
+        }
 
         const signatureBuffer = Buffer.from(signature, "hex");
         const messageBuffer = Buffer.concat(messageBuffers);
@@ -300,15 +353,14 @@ class SoltoBTCLN {
     }
 
     async payOnchain(address: string, amount: BN, confirmationTarget: number, confirmations: number, url: string): Promise<{
-        address: PublicKey,
         networkFee: BN,
         swapFee: BN,
         totalFee: BN,
-        total: BN,
-        minRequiredExpiry: BN,
-        offerExpiry: number,
         data: PaymentRequestStruct,
-        nonce: BN
+        prefix: string,
+        timeout: string,
+        signature: string,
+        nonce: number
     }> {
         const firstPart = new BN(Math.floor((Date.now()/1000)) - 700000000);
 
@@ -360,30 +412,60 @@ class SoltoBTCLN {
 
         let jsonBody: any = await response.json();
 
+        const swapFee = new BN(jsonBody.data.swapFee);
+        const networkFee = new BN(jsonBody.data.networkFee);
+        const totalFee = new BN(jsonBody.data.totalFee);
+
+        if(!totalFee.eq(swapFee.add(networkFee))){
+            throw new Error("Invalid totalFee returned");
+        }
+
         const total = new BN(jsonBody.data.total);
-        const expiryTimestamp = new BN(jsonBody.data.minRequiredExpiry);
+
+        if(!total.eq(amount.add(totalFee))){
+            throw new Error("Invalid total returned");
+        }
+
+        const data: PaymentRequestStruct = {
+            intermediary: new PublicKey(jsonBody.data.data.intermediary),
+            token: new PublicKey(jsonBody.data.data.token),
+            amount: new BN(jsonBody.data.data.amount),
+            paymentHash: jsonBody.data.data.paymentHash,
+            expiry: new BN(jsonBody.data.data.expiry),
+            nonce: new BN(jsonBody.data.data.nonce),
+            kind: 2,
+            confirmations: jsonBody.data.data.confirmations,
+            payOut: jsonBody.data.data.payOut
+        };
+
+        if(
+            !data.token.equals(this.WBTC_ADDRESS) ||
+            !data.amount.eq(total) ||
+            data.paymentHash!==hash ||
+            !data.nonce.eq(nonce) ||
+            data.confirmations!==confirmations
+        ) {
+            throw new Error("Invalid data returned");
+        }
+
+        await this.isValidInitAuthorization(data, jsonBody.data.prefix, jsonBody.data.timeout, jsonBody.data.signature, jsonBody.data.nonce);
 
         return {
-            address: new PublicKey(jsonBody.data.address),
             networkFee: new BN(jsonBody.data.networkFee),
             swapFee: new BN(jsonBody.data.swapFee),
             totalFee: new BN(jsonBody.data.totalFee),
-            total: total,
-            minRequiredExpiry: expiryTimestamp,
-            offerExpiry: jsonBody.data.offerExpiry,
-            nonce,
-            data: {
-                intermediary: new PublicKey(jsonBody.data.address),
-                token: this.WBTC_ADDRESS,
-                amount: total,
-                paymentHash: hash,
-                expiry: expiryTimestamp
-            }
-        }
+            data,
+            prefix: jsonBody.data.prefix,
+            timeout: jsonBody.data.timeout,
+            signature: jsonBody.data.signature,
+            nonce: jsonBody.data.nonce
+        };
 
     }
 
-    async createChainPayIx(address: PublicKey, data: PaymentRequestStruct, confirmations: number, nonce: BN): Promise<TransactionInstruction> {
+    async createPayIxs(address: PublicKey, data: PaymentRequestStruct, prefix: string, timeout: string, signature: string, nonce: number): Promise<TransactionInstruction[]> {
+        const messageBuffer = await this.isValidInitAuthorization(data, prefix, timeout, signature, nonce);
+
         const payStatus = await this.getPaymentHashStatus(data.paymentHash);
 
         if(payStatus!==PaymentRequestStatus.NOT_FOUND) {
@@ -398,30 +480,56 @@ class SoltoBTCLN {
         console.log("Authority key: ", this.vaultAuthorityKey);
 
         const ix = await this.program.methods
-            .offererInitializePayIn(data.amount, data.expiry, paymentHash, new BN(2), new BN(confirmations), nonce, false, Buffer.alloc(32, 0))
+            .offererInitializePayIn(
+                new BN(nonce),
+                data.amount,
+                data.expiry,
+                paymentHash,
+                new BN(data.kind),
+                new BN(data.confirmations),
+                new BN(timeout),
+                Buffer.from(signature, "hex"),
+                data.nonce,
+                data.payOut,
+                Buffer.alloc(32, 0)
+            )
             .accounts({
                 initializer: address,
                 initializerDepositTokenAccount: ata,
                 claimer: data.intermediary,
                 claimerTokenAccount: ataIntermediary,
+                userData: this.getUserVaultKey(data.intermediary),
                 escrowState: this.getEscrowStateKey(paymentHash),
                 vault: this.vaultKey,
                 vaultAuthority: this.vaultAuthorityKey,
                 mint: this.WBTC_ADDRESS,
                 systemProgram: SystemProgram.programId,
                 rent: SYSVAR_RENT_PUBKEY,
-                tokenProgram: TOKEN_PROGRAM_ID
+                tokenProgram: TOKEN_PROGRAM_ID,
+                ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY
             })
             .instruction();
 
-        console.log("IX: ", ix);
+        console.log("Created init ix: ", ix);
 
-        return ix;
+        const signatureVerificationInstruction = Ed25519Program.createInstructionWithPublicKey({
+            message: messageBuffer,
+            publicKey: data.intermediary.toBuffer(),
+            signature: Buffer.from(signature, "hex")
+        });
+
+        console.log("Sig verify: ", signatureVerificationInstruction);
+
+        return [signatureVerificationInstruction, ix];
     }
 
-    async createChainPayTx(address: PublicKey, data: PaymentRequestStruct, confirmations: number, nonce: BN): Promise<Transaction> {
-        const ix = await this.createChainPayIx(address, data, confirmations, nonce);
-        return new Transaction().add(ix);
+    async createPayTx(address: PublicKey, data: PaymentRequestStruct, prefix: string, authTimeout: string, signature: string, nonce: number): Promise<Transaction> {
+        const ixs = await this.createPayIxs(address, data, prefix, authTimeout, signature, nonce);
+        const tx = new Transaction();
+        for(let ix of ixs) {
+            tx.add(ix);
+        }
+        return tx;
     }
 
 
@@ -429,7 +537,11 @@ class SoltoBTCLN {
         confidence: string,
         address: PublicKey,
         swapFee: BN,
-        data: PaymentRequestStruct
+        data: PaymentRequestStruct,
+        prefix: string,
+        timeout: string,
+        signature: string,
+        nonce: number
     }> {
 
         const parsedPR = bolt11.decode(bolt11PayReq);
@@ -471,63 +583,106 @@ class SoltoBTCLN {
         let jsonBody: any = await response.json();
 
         const swapFee = new BN(jsonBody.data.swapFee);
+        const totalFee = swapFee.add(maxFee);
+
+        const total = new BN(jsonBody.data.total);
+
+        if(!total.eq(sats.add(totalFee))){
+            throw new Error("Invalid total returned");
+        }
+
+        const data: PaymentRequestStruct = {
+            intermediary: new PublicKey(jsonBody.data.data.intermediary),
+            token: new PublicKey(jsonBody.data.data.token),
+            amount: new BN(jsonBody.data.data.amount),
+            paymentHash: jsonBody.data.data.paymentHash,
+            expiry: new BN(jsonBody.data.data.expiry),
+            nonce: new BN(jsonBody.data.data.nonce),
+            kind: 0,
+            confirmations: jsonBody.data.data.confirmations,
+            payOut: jsonBody.data.data.payOut
+        };
+
+        if(!data.token.equals(this.WBTC_ADDRESS)) {
+            throw new Error("Invalid data returned - token");
+        }
+
+        if(!data.amount.eq(total)) {
+            throw new Error("Invalid data returned - amount");
+        }
+
+        if(data.paymentHash!==parsedPR.tagsObject.payment_hash) {
+            throw new Error("Invalid data returned - paymentHash");
+        }
+
+        if(!data.nonce.eq(new BN(0))) {
+            throw new Error("Invalid data returned - nonce");
+        }
+
+        if(data.confirmations!==0) {
+            throw new Error("Invalid data returned - confirmations");
+        }
+
+        if(!data.expiry.eq(new BN(expiryTimestamp))) {
+            throw new Error("Invalid data returned - expiry");
+        }
+
+        await this.isValidInitAuthorization(data, jsonBody.data.prefix, jsonBody.data.timeout, jsonBody.data.signature, jsonBody.data.nonce);
 
         return {
             confidence: jsonBody.data.confidence,
             address: new PublicKey(jsonBody.data.address),
             swapFee: swapFee,
-            data: {
-                intermediary: new PublicKey(jsonBody.data.address),
-                token: this.WBTC_ADDRESS,
-                amount: sats.add(maxFee).add(swapFee),
-                paymentHash: parsedPR.tagsObject.payment_hash,
-                expiry: new BN(expiryTimestamp)
-            }
+            data,
+            prefix: jsonBody.data.prefix,
+            timeout: jsonBody.data.timeout,
+            signature: jsonBody.data.signature,
+            nonce: jsonBody.data.nonce
         }
 
     }
 
-    async createPayIx(address: PublicKey, data: PaymentRequestStruct): Promise<TransactionInstruction> {
-        const payStatus = await this.getPaymentHashStatus(data.paymentHash);
+    // async createPayIx(address: PublicKey, data: PaymentRequestStruct): Promise<TransactionInstruction> {
+    //     const payStatus = await this.getPaymentHashStatus(data.paymentHash);
+    //
+    //     if(payStatus!==PaymentRequestStatus.NOT_FOUND) {
+    //         throw new Error("Invoice already being paid for or paid");
+    //     }
+    //
+    //     const paymentHash = Buffer.from(data.paymentHash, "hex");
+    //
+    //     const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
+    //
+    //     const ataIntermediary = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, data.intermediary);
+    //
+    //     const ix = await this.program.methods
+    //         .offererInitializePayIn(data.amount, data.expiry, paymentHash, new BN(0), new BN(0), new BN(0), false, Buffer.alloc(32, 0))
+    //         .accounts({
+    //             initializer: address,
+    //             initializerDepositTokenAccount: ata,
+    //             claimer: data.intermediary,
+    //             claimerTokenAccount: ataIntermediary,
+    //             escrowState: this.getEscrowStateKey(paymentHash),
+    //             vault: this.vaultKey,
+    //             vaultAuthority: this.vaultAuthorityKey,
+    //             mint: this.WBTC_ADDRESS,
+    //             systemProgram: SystemProgram.programId,
+    //             rent: SYSVAR_RENT_PUBKEY,
+    //             tokenProgram: TOKEN_PROGRAM_ID
+    //         })
+    //         .instruction();
+    //
+    //     console.log("IX: ", ix);
+    //
+    //     return ix;
+    // }
+    //
+    // async createPayTx(address: PublicKey, data: PaymentRequestStruct): Promise<Transaction> {
+    //     const ix = await this.createPayIx(address, data);
+    //     return new Transaction().add(ix);
+    // }
 
-        if(payStatus!==PaymentRequestStatus.NOT_FOUND) {
-            throw new Error("Invoice already being paid for or paid");
-        }
-
-        const paymentHash = Buffer.from(data.paymentHash, "hex");
-
-        const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
-
-        const ataIntermediary = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, data.intermediary);
-
-        const ix = await this.program.methods
-            .offererInitializePayIn(data.amount, data.expiry, paymentHash, new BN(0), new BN(0), new BN(0), false, Buffer.alloc(32, 0))
-            .accounts({
-                initializer: address,
-                initializerDepositTokenAccount: ata,
-                claimer: data.intermediary,
-                claimerTokenAccount: ataIntermediary,
-                escrowState: this.getEscrowStateKey(paymentHash),
-                vault: this.vaultKey,
-                vaultAuthority: this.vaultAuthorityKey,
-                mint: this.WBTC_ADDRESS,
-                systemProgram: SystemProgram.programId,
-                rent: SYSVAR_RENT_PUBKEY,
-                tokenProgram: TOKEN_PROGRAM_ID
-            })
-            .instruction();
-
-        console.log("IX: ", ix);
-
-        return ix;
-    }
-
-    async createPayTx(address: PublicKey, data: PaymentRequestStruct): Promise<Transaction> {
-        const ix = await this.createPayIx(address, data);
-        return new Transaction().add(ix);
-    }
-
-    async getRefundAuthorization(address: PublicKey, data: PaymentRequestStruct, url: string, nonce?: BN): Promise<{
+    async getRefundAuthorization(address: PublicKey, data: PaymentRequestStruct, url: string): Promise<{
         is_paid: boolean,
         txId?: string,
         secret?: string,
@@ -585,7 +740,7 @@ class SoltoBTCLN {
                 const paymentHashBuffer = Buffer.from(data.paymentHash, "hex");
 
                 const foundVout = (btcTx as BitcoinTransaction).vout.find(e =>
-                    SoltoBTCLN.getHashForOnchain(Buffer.from(e.scriptpubkey, "hex"), new BN(e.value), nonce).equals(paymentHashBuffer));
+                    SoltoBTCLN.getHashForOnchain(Buffer.from(e.scriptpubkey, "hex"), new BN(e.value), data.nonce).equals(paymentHashBuffer));
 
                 if(foundVout==null) {
                     console.error("Invalid btc txId returned, dishonest node?");
@@ -626,7 +781,7 @@ class SoltoBTCLN {
 
     }
 
-    async waitForRefundAuthorization(address: PublicKey, data: PaymentRequestStruct, url: string, abortSignal?: AbortSignal, intervalSeconds?: number, nonce?: BN): Promise<{
+    async waitForRefundAuthorization(address: PublicKey, data: PaymentRequestStruct, url: string, abortSignal?: AbortSignal, intervalSeconds?: number): Promise<{
         is_paid: boolean,
         txId?: string,
         secret?: string,
@@ -642,7 +797,7 @@ class SoltoBTCLN {
         //const amount = ethers.BigNumber.from(decodedPR.millisatoshis).div(ethers.BigNumber.from(1000));
 
         while(abortSignal!=null && !abortSignal.aborted) {
-            const result = await this.getRefundAuthorization(address, data, url, nonce);
+            const result = await this.getRefundAuthorization(address, data, url);
             if(result!=null) return result;
             await timeoutPromise(intervalSeconds || 5);
         }
@@ -659,7 +814,7 @@ class SoltoBTCLN {
 
         const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
 
-        const ix = await this.program.methods
+        let builder = this.program.methods
             .offererRefundPayOut()
             .accounts({
                 offerer: address,
@@ -669,8 +824,19 @@ class SoltoBTCLN {
                 initializerDepositTokenAccount: ata,
                 escrowState: this.getEscrowStateKey(Buffer.from(data.paymentHash, "hex")),
                 tokenProgram: TOKEN_PROGRAM_ID,
-            })
-            .instruction();
+            });
+
+        if(!data.payOut) {
+            builder = builder.remainingAccounts([
+                {
+                    isSigner: false,
+                    isWritable: true,
+                    pubkey: this.getUserVaultKey(data.intermediary)
+                }
+            ])
+        }
+
+        const ix = await builder.instruction();
 
         return ix;
     }
@@ -694,7 +860,7 @@ class SoltoBTCLN {
 
         const ata = getAssociatedTokenAddressSync(this.WBTC_ADDRESS, address);
 
-        let result = await this.program.methods
+        let builder = this.program.methods
             .offererRefundWithSignaturePayOut(new BN(timeout), signatureBuffer)
             .accounts({
                 offerer: address,
@@ -706,8 +872,19 @@ class SoltoBTCLN {
                 escrowState: this.getEscrowStateKey(paymentHash),
                 tokenProgram: TOKEN_PROGRAM_ID,
                 ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY
-            })
-            .instruction();
+            });
+
+        if(!data.payOut) {
+            builder = builder.remainingAccounts([
+                {
+                    isSigner: false,
+                    isWritable: true,
+                    pubkey: this.getUserVaultKey(data.intermediary)
+                }
+            ])
+        }
+
+        const result = await builder.instruction();
 
         const signatureVerificationInstruction = Ed25519Program.createInstructionWithPublicKey({
             message: messageBuffer,
@@ -732,13 +909,6 @@ class SoltoBTCLN {
         }
         return tx;
 
-    }
-
-    //TODO: Not implemented yet because of a 10k max block range limitation on QuickNode RPCs
-    async getPastConversions(address: string, startBlockHeight?: number): Promise<PaymentRequestStruct[]> {
-        throw new Error("Not implemented");
-        // const structs: PaymentRequestStruct[] = [];
-        // return structs;
     }
 
 }

@@ -405,7 +405,7 @@ class BTCLNtoSol {
         address: string,
         swapFee: BN,
         intermediary: PublicKey,
-        data: AtomicSwapStruct
+        data: AtomicSwapStruct,
         prefix: string,
         timeout: string,
         signature: string,

@@ -3,8 +3,8 @@ import * as bolt11 from "bolt11";
 
 import {createHash, randomBytes} from "crypto-browserify";
 import {
-    Ed25519Program,
-    PublicKey,
+    Ed25519Program, Keypair,
+    PublicKey, Signer,
     SystemProgram,
     SYSVAR_INSTRUCTIONS_PUBKEY,
     SYSVAR_RENT_PUBKEY, Transaction, TransactionInstruction
@@ -114,6 +114,11 @@ class BTCLNtoSol {
         )[0];
     }
 
+    getSwapDataKeyAlt(reversedTxId: Buffer, secretKey: Buffer): Signer {
+        const buff = createHash("sha256").update(Buffer.concat([secretKey, reversedTxId])).digest();
+        return Keypair.fromSeed(buff);
+    }
+
     getUserVaultKey(wallet: PublicKey) {
         return PublicKey.findProgramAddressSync(
             [Buffer.from(USER_VAULT_SEED), wallet.toBuffer(), this.WBTC_ADDRESS.toBuffer()],
@@ -130,7 +135,7 @@ class BTCLNtoSol {
 
     async getData(pubkey: PublicKey) {
         try {
-            return await this.program.account.data.fetch(pubkey);
+            return await this.provider.connection.getAccountInfo(pubkey);
         } catch (e) {
             console.error(e);
             return null;
@@ -954,7 +959,10 @@ class BTCLNtoSol {
         return tx;
     }
 
-    async createClaimTxs(intermediary: PublicKey, data: AtomicSwapStruct, txId: string, vout: number): Promise<Transaction[]> {
+    async createClaimTxs(intermediary: PublicKey, data: AtomicSwapStruct, txId: string, vout: number, secretKey: Buffer): Promise<{
+        tx: Transaction
+        signers?: Signer[]
+    }[]> {
         const reversedTxId = Buffer.from(txId, "hex").reverse();
 
         const merkleProof = await ChainUtils.getTransactionProof(txId);
@@ -964,13 +972,16 @@ class BTCLNtoSol {
 
         const requiredBlockheight = merkleProof.block_height+data.confirmations-1;
 
-        const txs: Transaction[] = [];
+        const txs: {
+            tx: Transaction
+            signers?: Signer[]
+        }[] = [];
 
         let commitedHeader = btcRelayResponse.header;
         if(btcRelayResponse.height<requiredBlockheight) {
             //Need to synchronize
             const resp = await this.btcRelaySynchronizer.syncToLatestTxs();
-            resp.txs.forEach(tx => txs.push(tx));
+            resp.txs.forEach(tx => txs.push({tx}));
             console.log("BTC Relay not synchronized to required blockheight, synchronizing ourselves in "+resp.txs.length+" txs");
             console.log("BTC Relay computed header map: ",resp.computedHeaderMap);
             if(commitedHeader==null) {
@@ -981,13 +992,22 @@ class BTCLNtoSol {
 
         console.log("Target commit header ", commitedHeader);
 
-        const swapDataKey = this.getSwapDataKey(reversedTxId, data.intermediary);
+        const swapDataKey = this.getSwapDataKeyAlt(reversedTxId, secretKey);
 
-        const fetchedDataAccount = await this.getData(swapDataKey);
+        const fetchedDataAccount = await this.getData(swapDataKey.publicKey);
         if(fetchedDataAccount!=null) {
             console.log("Will erase previous data account");
-            const eraseTx = await this.createCloseDataTx(reversedTxId, data.intermediary);
-            txs.push(eraseTx);
+            const eraseTx = await this.program.methods
+                .closeData()
+                .accounts({
+                    signer: this.provider.publicKey,
+                    data: swapDataKey.publicKey
+                })
+                .transaction();
+
+            txs.push({
+                tx: eraseTx
+            });
         }
 
         const witnessRawTxBuffer = await ChainUtils.getRawTransaction(txId);
@@ -1005,12 +1025,51 @@ class BTCLNtoSol {
             rawTxBuffer
         ]);
 
+        {
+            const dataSize = writeData.length;
+            const accountSize = 32+dataSize;
+            const lamports = await this.provider.connection.getMinimumBalanceForRentExemption(accountSize);
+
+            const accIx = SystemProgram.createAccount({
+                fromPubkey: this.provider.publicKey,
+                newAccountPubkey: swapDataKey.publicKey,
+                lamports,
+                space: accountSize,
+                programId: this.program.programId
+            });
+
+            const initIx = await this.program.methods
+                .initData()
+                .accounts({
+                    signer: this.provider.publicKey,
+                    data: swapDataKey.publicKey
+                })
+                .instruction();
+
+            const initTx = new Transaction();
+            initTx.add(accIx);
+            initTx.add(initIx);
+
+            txs.push({
+                tx: initTx,
+                signers: [swapDataKey]
+            });
+        }
+
         let pointer = 0;
         while(pointer<writeData.length) {
             const writeLen = Math.min(writeData.length-pointer, 1000);
 
-            const writeTx = await this.createWriteDataTx(reversedTxId, data.intermediary, writeData.length, writeData.slice(pointer, writeLen));
-            txs.push(writeTx);
+            const writeTx = await this.program.methods
+                .writeData(pointer, writeData.slice(pointer, writeLen))
+                .accounts({
+                    signer: this.provider.publicKey,
+                    data: swapDataKey.publicKey,
+                })
+                .transaction();
+            txs.push({
+                tx: writeTx
+            });
 
             pointer += writeLen;
         }
@@ -1021,14 +1080,14 @@ class BTCLNtoSol {
 
         const verifyIx = await this.btcRelay.createVerifyIx(reversedTxId, data.confirmations, merkleProof.pos, reversedMerkleProof, commitedHeader);
         const claimIx = await this.program.methods
-            .claimerClaimPayOutWithExtData(reversedTxId)
+            .claimerClaimPayOutWithExtData()
             .accounts({
                 signer: data.intermediary,
                 offerer: intermediary,
                 claimerReceiveTokenAccount: ata,
                 escrowState: this.getEscrowStateKey(Buffer.from(data.paymentHash, "hex")),
                 vault: this.vaultKey,
-                data: swapDataKey,
+                data: swapDataKey.publicKey,
                 vaultAuthority: this.vaultAuthorityKey,
                 systemProgram: SystemProgram.programId,
                 ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY
@@ -1039,7 +1098,9 @@ class BTCLNtoSol {
         claimTx.add(verifyIx);
         claimTx.add(claimIx);
 
-        txs.push(claimTx);
+        txs.push({
+            tx: claimTx
+        });
 
         return txs;
 

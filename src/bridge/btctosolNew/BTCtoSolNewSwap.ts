@@ -1,12 +1,12 @@
 import IBTCxtoSolSwap, {BTCxtoSolSwapState} from "../IBTCxtoSolSwap";
-import {PublicKey, SystemProgram, Transaction, TransactionSignature} from "@solana/web3.js";
+import {Keypair, PublicKey, SystemProgram, Transaction, TransactionSignature} from "@solana/web3.js";
 import {AnchorProvider, BN} from "@project-serum/anchor";
 import BTCLNtoSol, {AtomicSwapStruct} from "../btclntosol/BTCLNtoSol";
 import BTCtoSolWrapper from "../btctosol/BTCtoSolWrapper";
 import * as EventEmitter from "events";
 import SwapType from "../SwapType";
 import * as bitcoin from "bitcoinjs-lib";
-import {createHash} from "crypto-browserify";
+import {createHash, randomBytes} from "crypto-browserify";
 import {ConstantBTCtoSol} from "../../Constants";
 import ChainUtils from "../../ChainUtils";
 import BTCtoSolNewWrapper from "./BTCtoSolNewWrapper";
@@ -28,6 +28,7 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
 
     readonly fromAddress: PublicKey;
     readonly url: string;
+    readonly secret: string;
 
     //State: PR_CREATED
     readonly address: string;
@@ -96,6 +97,8 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
             this.timeout = timeout;
             this.signature = signature;
             this.nonce = nonce;
+
+            this.secret = randomBytes(32).toString("hex");
         } else {
             this.state = addressOrObject.state;
 
@@ -107,6 +110,7 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
             this.amount = new BN(addressOrObject.amount);
             this.txId = addressOrObject.txId;
             this.vout = addressOrObject.vout;
+            this.secret = addressOrObject.secret;
 
             this.intermediary = addressOrObject.intermediary!=null ? new PublicKey(addressOrObject.intermediary) : null;
             this.data = addressOrObject.data !=null ? {
@@ -156,6 +160,8 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
             amount: this.amount.toString(),
             txId: this.txId,
             vout: this.vout,
+
+            secret: this.secret,
 
             intermediary: this.intermediary!=null ? this.intermediary.toBase58() : null,
             data: this.data!=null ? {
@@ -331,15 +337,22 @@ export default class BTCtoSolNewSwap implements IBTCxtoSolSwap {
             throw new Error("Must be in BTC_TX_CONFIRMED state!");
         }
 
-        const claimTxs = await this.wrapper.contract.createClaimTxs(this.intermediary, this.data, this.txId, this.vout);
+        const claimTxs = await this.wrapper.contract.createClaimTxs(this.intermediary, this.data, this.txId, this.vout, Buffer.from(this.secret, "hex"));
 
         const {blockhash} = await signer.connection.getRecentBlockhash();
+        const txs = [];
         for(let tx of claimTxs) {
-            tx.recentBlockhash = blockhash;
-            tx.feePayer = signer.wallet.publicKey;
+            tx.tx.recentBlockhash = blockhash;
+            tx.tx.feePayer = signer.wallet.publicKey;
+            if(tx.signers!=null) {
+                for(let signer of tx.signers) {
+                    tx.tx.sign(signer);
+                }
+            }
+            txs.push(tx.tx);
         }
         //Maybe don't wait for TX but instead subscribe to logs, this would improve the experience when user speeds up the transaction by replacing it.
-        const signedTxs = await signer.wallet.signAllTransactions(claimTxs);
+        const signedTxs = await signer.wallet.signAllTransactions(txs);
 
         //TODO: Any of these transactions may fail, due to other relayers syncing the blockchain themselves, or watchtowers claiming the swap for us,
         // however this doesn't mean that the claim request actually failed, should take it into account

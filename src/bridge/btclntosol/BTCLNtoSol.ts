@@ -990,7 +990,15 @@ class BTCLNtoSol {
             txs.push(eraseTx);
         }
 
-        const rawTxBuffer = await ChainUtils.getRawTransaction(txId);
+        const witnessRawTxBuffer = await ChainUtils.getRawTransaction(txId);
+
+        const btcTx = bitcoin.Transaction.fromBuffer(witnessRawTxBuffer);
+
+        for(let txIn of btcTx.ins) {
+            txIn.witness = []; //Strip witness data
+        }
+
+        const rawTxBuffer = btcTx.toBuffer();
 
         const writeData: Buffer = Buffer.concat([
             Buffer.from(new BN(vout).toArray("le", 4)),

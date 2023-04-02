@@ -994,21 +994,23 @@ class BTCLNtoSol {
 
         const swapDataKey = this.getSwapDataKeyAlt(reversedTxId, secretKey);
 
-        const fetchedDataAccount = await this.getData(swapDataKey.publicKey);
-        if(fetchedDataAccount!=null) {
-            console.log("Will erase previous data account");
-            const eraseTx = await this.program.methods
-                .closeData()
-                .accounts({
-                    signer: this.provider.publicKey,
-                    data: swapDataKey.publicKey
-                })
-                .transaction();
+        try {
+            const fetchedDataAccount = await this.provider.connection.getAccountInfo(swapDataKey.publicKey);
+            if(fetchedDataAccount!=null) {
+                console.log("Will erase previous data account");
+                const eraseTx = await this.program.methods
+                    .closeData()
+                    .accounts({
+                        signer: this.provider.publicKey,
+                        data: swapDataKey.publicKey
+                    })
+                    .transaction();
 
-            txs.push({
-                tx: eraseTx
-            });
-        }
+                txs.push({
+                    tx: eraseTx
+                });
+            }
+        } catch (e) {}
 
         const witnessRawTxBuffer = await ChainUtils.getRawTransaction(txId);
 

@@ -1,6 +1,6 @@
 import {AnchorProvider, BN} from "@project-serum/anchor";
 import {TransactionSignature} from "@solana/web3.js";
-import ISolToBTCxWrapper from "./ISolToBTCxWrapper";
+import ISolToBTCxWrapper from "./tobtc/ISolToBTCxWrapper";
 import {EventEmitter} from "events";
 import IBTCxtoSolWrapper from "./IBTCxtoSolWrapper";
 import ISwap from "./ISwap";

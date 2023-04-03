@@ -1,0 +1,122 @@
+import SoltoBTCWrapper from "./SoltoBTCWrapper";
+import ISolToBTCxSwap, {SolToBTCxSwapState} from "../tobtc/ISolToBTCxSwap";
+import SwapType from "../SwapType";
+import SwapData from "../swaps/SwapData";
+import * as BN from "bn.js";
+
+export default class SoltoBTCSwap<T extends SwapData> extends ISolToBTCxSwap<T> {
+
+    //State: PR_CREATED
+    readonly address: string;
+    readonly amount: BN;
+    readonly confirmationTarget: number;
+
+    readonly networkFee: BN;
+    readonly swapFee: BN;
+    readonly totalFee: BN;
+
+    txId: string;
+
+    constructor(
+        wrapper: SoltoBTCWrapper<T>,
+        address: string,
+        amount: BN,
+        confirmationTarget: number,
+        networkFee: BN,
+        swapFee: BN,
+        totalFee: BN,
+        data: T,
+        prefix: string,
+        timeout: string,
+        signature: string,
+        nonce: number,
+        url: string
+    );
+    constructor(wrapper: SoltoBTCWrapper<T>, obj: any);
+
+    constructor(
+        wrapper: SoltoBTCWrapper<T>,
+        addressOrObject: string | any,
+        amount?: BN,
+        confirmationTarget?: number,
+        networkFee?: BN,
+        swapFee?: BN,
+        totalFee?: BN,
+        data?: T,
+        prefix?: string,
+        timeout?: string,
+        signature?: string,
+        nonce?: number,
+        url?: string
+    ) {
+        if(typeof(addressOrObject)==="string") {
+            super(wrapper, data, prefix, timeout, signature, nonce, url);
+
+            this.address = addressOrObject;
+            this.amount = amount;
+            this.confirmationTarget = confirmationTarget;
+            this.networkFee = networkFee;
+            this.swapFee = swapFee;
+            this.totalFee = totalFee;
+        } else {
+            super(wrapper, addressOrObject);
+
+            this.address = addressOrObject.address;
+            this.amount = new BN(addressOrObject.amount);
+            this.confirmationTarget = addressOrObject.confirmationTarget;
+            this.networkFee = new BN(addressOrObject.networkFee);
+            this.swapFee = new BN(addressOrObject.swapFee);
+            this.totalFee = new BN(addressOrObject.totalFee);
+            this.txId = addressOrObject.txId;
+        }
+    }
+
+    /**
+     * Returns amount that will be sent on Solana
+     */
+    getInAmount(): BN {
+        return this.data.getAmount();
+    }
+
+    /**
+     * Returns amount that will be sent to recipient on Bitcoin LN
+     */
+    getOutAmount(): BN {
+        return this.amount
+    }
+
+    serialize(): any {
+        const partialySerialized = super.serialize();
+
+        partialySerialized.address = this.address;
+        partialySerialized.amount = this.amount.toString(10);
+        partialySerialized.confirmationTarget = this.confirmationTarget;
+        partialySerialized.networkFee = this.networkFee.toString(10);
+        partialySerialized.swapFee = this.swapFee.toString(10);
+        partialySerialized.totalFee = this.totalFee.toString(10);
+        partialySerialized.txId = this.txId;
+
+        return partialySerialized;
+    }
+
+    getTxId(): string {
+        return this.txId;
+    }
+
+    getPaymentHash(): Buffer {
+        return Buffer.from(this.data.getHash(), "hex");
+    }
+
+    getAddress(): string {
+        return this.address;
+    }
+
+    getType(): SwapType {
+        return SwapType.SOL_TO_BTC;
+    }
+
+    getState(): SolToBTCxSwapState {
+        return this.state;
+    }
+
+}

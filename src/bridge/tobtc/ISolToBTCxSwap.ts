@@ -1,25 +1,18 @@
-import {PublicKey, TransactionSignature} from "@solana/web3.js";
-import * as EventEmitter from "events";
-import {AnchorProvider, BN} from "@project-serum/anchor";
-import * as bolt11 from "bolt11";
-import SoltoBTCLN, {PaymentRequestStruct} from "./SoltoBTCLN";
-import SoltoBTCLNWrapper from "./SoltoBTCLNWrapper";
-import ISolToBTCxSwap, {SolToBTCxSwapState} from "../ISolToBTCxSwap";
-import SwapType from "../SwapType";
 
-export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
+import ISolToBTCxWrapper from "./ISolToBTCxWrapper";
+import ISwap from "./ISwap";
+import * as BN from "bn.js";
+import SwapData from "./swaps/SwapData";
+import * as EventEmitter from "events";
+import SwapType from "./SwapType";
+
+abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
 
     state: SolToBTCxSwapState;
 
-    readonly fromAddress: PublicKey;
     readonly url: string;
-    readonly confidence: number;
 
-    //State: PR_CREATED
-    readonly pr: string;
-
-    //State: PR_PAID
-    data: PaymentRequestStruct;
+    data: T;
 
     prefix: string;
     timeout: string;
@@ -28,7 +21,7 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
 
     secret: string;
 
-    readonly wrapper: SoltoBTCLNWrapper;
+    readonly wrapper: ISolToBTCxWrapper<T>;
 
     /**
      * Swap's event emitter
@@ -38,43 +31,23 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
      */
     readonly events: EventEmitter;
 
-    constructor(
-        wrapper: SoltoBTCLNWrapper,
-        pr: string,
-        data: PaymentRequestStruct,
-        prefix: string,
-        timeout: string,
-        signature: string,
-        nonce: number,
-        url: string,
-        fromAddress: PublicKey,
-        confidence: string
-    );
-    constructor(wrapper: SoltoBTCLNWrapper, obj: any);
-
-    constructor(
-        wrapper: SoltoBTCLNWrapper,
-        prOrObject: string | any,
-        data?: PaymentRequestStruct,
+    protected constructor(
+        wrapper: ISolToBTCxWrapper<T>,
+        prOrObject: T | any,
         prefix?: string,
         timeout?: string,
         signature?: string,
         nonce?: number,
         url?: string,
-        fromAddress?: PublicKey,
-        confidence?: string,
     ) {
         this.wrapper = wrapper;
         this.events = new EventEmitter();
-        if(typeof(prOrObject)==="string") {
+        if(prefix!=null || timeout!=null || signature!=null || nonce!=null || url!=null) {
             this.state = SolToBTCxSwapState.CREATED;
 
-            this.fromAddress = fromAddress;
             this.url = url;
-            this.confidence = parseFloat(confidence);
 
-            this.pr = prOrObject;
-            this.data = data;
+            this.data = prOrObject;
 
             this.prefix = prefix;
             this.timeout = timeout;
@@ -84,24 +57,10 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
             this.state = prOrObject.state;
 
             this.url = prOrObject.url;
-            this.fromAddress = new PublicKey(prOrObject.fromAddress);
-            this.confidence = prOrObject.confidence;
-
-            this.pr = prOrObject.pr;
 
             this.secret = prOrObject.secret;
 
-            this.data = prOrObject.data !=null ? {
-                intermediary: new PublicKey(prOrObject.data.intermediary),
-                token: new PublicKey(prOrObject.data.token),
-                amount: new BN(prOrObject.data.amount),
-                paymentHash: prOrObject.data.paymentHash,
-                expiry: new BN(prOrObject.data.expiry),
-                nonce: prOrObject.data.nonce==null ? null : new BN(prOrObject.data.nonce),
-                kind: prOrObject.data.kind,
-                confirmations: prOrObject.data.confirmations,
-                payOut: prOrObject.data.payOut,
-            } : null;
+            this.data = prOrObject.data!=null ? SwapData.deserialize<T>(prOrObject.data) : null;
 
             this.prefix = prOrObject.prefix;
             this.timeout = prOrObject.timeout;
@@ -113,17 +72,24 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
     /**
      * Returns amount that will be sent on Solana
      */
-    getInAmount(): BN {
-        return this.data.amount;
-    }
+    abstract getInAmount(): BN;
 
     /**
      * Returns amount that will be sent to recipient on Bitcoin LN
      */
-    getOutAmount(): BN {
-        const parsedPR = bolt11.decode(this.pr);
-        return new BN(parsedPR.satoshis);
-    }
+    abstract getOutAmount(): BN;
+
+    /**
+     * Get's the bitcoin address/lightning invoice of the recipient
+     */
+    abstract getAddress(): string;
+
+    /**
+     * Returns the payment hash
+     */
+    abstract getPaymentHash(): Buffer;
+
+    abstract getType(): SwapType;
 
     /**
      * Returns calculated fee for the swap
@@ -142,11 +108,10 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
     /**
      * Commits the swap on-chain, locking the tokens in an HTLC
      *
-     * @param signer                    Signer to use to send the commit transaction
      * @param noWaitForConfirmation     Do not wait for transaction confirmation
      * @param abortSignal               Abort signal
      */
-    async commit(signer: AnchorProvider, noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<TransactionSignature> {
+    async commit(noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<string> {
         if(this.state!==SolToBTCxSwapState.CREATED) {
             throw new Error("Must be in CREATED state!");
         }
@@ -158,25 +123,9 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
             throw new Error("Expired, please retry");
         }
 
-        const tx = await this.wrapper.contract.createPayTx(this.fromAddress, this.data, this.prefix, this.timeout, this.signature, this.nonce);
-
-        const {blockhash, lastValidBlockHeight} = await signer.connection.getLatestBlockhash();
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = signer.wallet.publicKey;
-        //Maybe don't wait for TX but instead subscribe to logs, this would improve the experience when user speeds up the transaction by replacing it.
-        const signedTx = await signer.wallet.signTransaction(tx);
-        const txResult = await signer.connection.sendRawTransaction(signedTx.serialize(), {
-            skipPreflight: true
-        });
+        const txResult = await this.wrapper.contract.initPayIn(this.data, this.timeout, this.prefix, this.signature, this.nonce, !noWaitForConfirmation, abortSignal);
 
         if(!noWaitForConfirmation) {
-            await signer.connection.confirmTransaction({
-                signature: txResult,
-                blockhash: blockhash,
-                lastValidBlockHeight,
-                abortSignal
-            }, "confirmed");
-
             this.state = SolToBTCxSwapState.COMMITED;
             await this.save();
             this.emitEvent();
@@ -224,7 +173,7 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
      * @returns {Promise<boolean>}  Was the payment successful? If not we can refund.
      */
     async waitForPayment(abortSignal?: AbortSignal, checkIntervalSeconds?: number): Promise<boolean> {
-        const result = await this.wrapper.contract.waitForRefundAuthorization(this.fromAddress, this.data, this.url, abortSignal, checkIntervalSeconds);
+        const result = await this.wrapper.contract.waitForRefundAuthorization(this.data, this.url, abortSignal, checkIntervalSeconds);
 
         if(abortSignal.aborted) throw new Error("Aborted");
 
@@ -247,38 +196,30 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
      * Returns whether a swap can be already refunded
      */
     canRefund(): boolean {
-        return this.state===SolToBTCxSwapState.REFUNDABLE || SoltoBTCLN.isExpired(this.data);
+        return this.state===SolToBTCxSwapState.REFUNDABLE || this.wrapper.contract.isExpired(this.data);
     }
 
     /**
      * Attempts a refund of the swap back to the initiator
      *
-     * @param signer                    Signer to use to send the refund transaction
      * @param noWaitForConfirmation     Do not wait for transaction confirmation
      * @param abortSignal               Abort signal
      */
-    async refund(signer: AnchorProvider, noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<TransactionSignature> {
-        if(this.state!==SolToBTCxSwapState.REFUNDABLE && !SoltoBTCLN.isExpired(this.data)) {
+    async refund(noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<string> {
+        if(this.state!==SolToBTCxSwapState.REFUNDABLE && !this.wrapper.contract.isExpired(this.data)) {
             throw new Error("Must be in REFUNDABLE state!");
         }
 
-        let tx;
-        if(SoltoBTCLN.isExpired(this.data)) {
-            tx = await this.wrapper.contract.createRefundTx(this.fromAddress, this.data);
+        let txResult: string;
+        if(this.wrapper.contract.isExpired(this.data)) {
+            txResult = await this.wrapper.contract.refund(this.data, !noWaitForConfirmation, abortSignal);
         } else {
-            const res = await this.wrapper.contract.getRefundAuthorization(this.fromAddress, this.data, this.url);
+            const res = await this.wrapper.contract.getRefundAuthorization(this.data, this.url);
             if(res.is_paid) {
                 throw new Error("Payment was successful");
             }
-            tx = await this.wrapper.contract.createRefundTxWithAuthorizationTx(this.fromAddress, this.data, res.timeout, res.prefix, res.signature);
+            txResult = await this.wrapper.contract.refundWithAuthorization(this.data, res.timeout, res.prefix, res.signature, !noWaitForConfirmation, abortSignal);
         }
-
-        const {blockhash} = await signer.connection.getRecentBlockhash();
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = signer.wallet.publicKey;
-        //Maybe don't wait for TX but instead subscribe to logs, this would improve the experience when user speeds up the transaction by replacing it.
-        const signedTx = await signer.wallet.signTransaction(tx);
-        const txResult = await signer.connection.sendRawTransaction(signedTx.serialize());
 
         if(!noWaitForConfirmation) {
             await this.waitTillRefunded(abortSignal);
@@ -328,21 +269,8 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
         return {
             state: this.state,
             url: this.url,
-            fromAddress: this.fromAddress.toBase58(),
-            pr: this.pr,
-            confidence: this.confidence,
             secret: this.secret,
-            data: this.data!=null ? {
-                intermediary: this.data.intermediary.toBase58(),
-                token: this.data.token.toBase58(),
-                amount: this.data.amount.toString(10),
-                paymentHash: this.data.paymentHash,
-                expiry: this.data.expiry.toString(10),
-                nonce: this.data.nonce==null ? null : this.data.nonce.toString(10),
-                kind: this.data.kind,
-                confirmations: this.data.confirmations,
-                payOut: this.data.payOut,
-            } : null,
+            data: this.data!=null ? this.data.serialize() : null,
             prefix: this.prefix,
             timeout: this.timeout,
             signature: this.signature,
@@ -354,40 +282,30 @@ export default class SoltoBTCLNSwap implements ISolToBTCxSwap {
         return this.wrapper.storage.saveSwapData(this);
     }
 
-    /**
-     * Returns wrapper used to create this swap
-     */
-    getWrapper(): SoltoBTCLNWrapper {
-        return this.wrapper;
-    }
-
     getTxId(): string {
         return this.secret;
     }
 
     /**
-     * Returns the confidence of the intermediary that this payment will succeed
-     * Value between 0 and 1, where 0 is not likely and 1 is very likely
+     * Returns the current state of the swap
      */
-    getConfidence(): number {
-        return this.confidence;
-    }
-
-    getPaymentHash(): Buffer {
-        const parsed = bolt11.decode(this.pr);
-        return Buffer.from(parsed.tagsObject.payment_hash, "hex");
-    }
-
-    getAddress(): string {
-        return this.pr;
-    }
-
-    getType(): SwapType {
-        return SwapType.SOL_TO_BTCLN;
-    }
-
     getState(): SolToBTCxSwapState {
         return this.state;
     }
 
+    getWrapper(): ISolToBTCxWrapper<T> {
+        return this.wrapper;
+    }
+
 }
+
+export enum SolToBTCxSwapState {
+    REFUNDED = -2,
+    FAILED = -1,
+    CREATED = 0,
+    COMMITED = 1,
+    CLAIMED = 2,
+    REFUNDABLE = 3
+}
+
+export default ISolToBTCxSwap;

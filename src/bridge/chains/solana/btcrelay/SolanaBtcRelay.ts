@@ -1,5 +1,5 @@
 import {AnchorProvider, BorshCoder, EventParser, Program} from "@project-serum/anchor";
-import {programIdl} from "./program/programIdl";
+import {programIdl} from "./programIdl";
 import {PublicKey, TransactionInstruction} from "@solana/web3.js";
 
 const LOG_FETCH_LIMIT = 500;
@@ -25,7 +25,7 @@ const HEADER_SEED = "header";
 const FORK_SEED = "fork";
 const BTC_RELAY_STATE_SEED = "state";
 
-export default class BtcRelay {
+export default class SolanaBtcRelay {
 
     provider: AnchorProvider;
     programCoder: BorshCoder;

@@ -2,12 +2,12 @@ import IBTCxtoSolSwap, {BTCxtoSolSwapState} from "../IBTCxtoSolSwap";
 import SwapType from "../../SwapType";
 import * as bitcoin from "bitcoinjs-lib";
 import {createHash, randomBytes} from "crypto-browserify";
-import {ConstantBTCtoSol} from "../../../Constants";
-import ChainUtils from "../../../ChainUtils";
+import {ConstantBTCtoSol} from "../../../../Constants";
+import ChainUtils from "../../../../ChainUtils";
 import BTCtoSolNewWrapper from "./BTCtoSolNewWrapper";
-import SwapData from "../../swaps/SwapData";
+import SwapData from "../../SwapData";
 import * as BN from "bn.js";
-import ClientSwapContract from "../../swaps/ClientSwapContract";
+import ClientSwapContract from "../../ClientSwapContract";
 
 export enum BTCtoSolNewSwapState {
     FAILED = -1,

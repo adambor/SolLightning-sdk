@@ -1,9 +1,9 @@
 import IBTCxtoSolSwap from "./IBTCxtoSolSwap";
-import IWrapperStorage from "../IWrapperStorage";
-import ClientSwapContract from "../swaps/ClientSwapContract";
-import ChainEvents from "../events/ChainEvents";
+import IWrapperStorage from "../../storage/IWrapperStorage";
+import ClientSwapContract from "../ClientSwapContract";
+import ChainEvents from "../../events/ChainEvents";
 import * as EventEmitter from "events";
-import SwapData from "../swaps/SwapData";
+import SwapData from "../SwapData";
 
 abstract class IBTCxtoSolWrapper<T extends SwapData> {
 

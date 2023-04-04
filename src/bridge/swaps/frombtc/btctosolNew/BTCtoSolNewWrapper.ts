@@ -1,15 +1,15 @@
 import IBTCxtoSolWrapper from "../IBTCxtoSolWrapper";
-import IWrapperStorage from "../../IWrapperStorage";
+import IWrapperStorage from "../../../storage/IWrapperStorage";
 import BTCtoSolNewSwap, {BTCtoSolNewSwapState} from "./BTCtoSolNewSwap";
-import ChainUtils from "../../../ChainUtils";
-import ClientSwapContract from "../../swaps/ClientSwapContract";
-import ChainEvents from "../../events/ChainEvents";
-import SwapData from "../../swaps/SwapData";
-import SwapCommitStatus from "../../swaps/SwapCommitStatus";
-import SwapEvent from "../../events/types/SwapEvent";
-import InitializeEvent from "../../events/types/InitializeEvent";
-import ClaimEvent from "../../events/types/ClaimEvent";
-import RefundEvent from "../../events/types/RefundEvent";
+import ChainUtils from "../../../../ChainUtils";
+import ClientSwapContract from "../../ClientSwapContract";
+import ChainEvents from "../../../events/ChainEvents";
+import SwapData from "../../SwapData";
+import SwapCommitStatus from "../../SwapCommitStatus";
+import SwapEvent from "../../../events/types/SwapEvent";
+import InitializeEvent from "../../../events/types/InitializeEvent";
+import ClaimEvent from "../../../events/types/ClaimEvent";
+import RefundEvent from "../../../events/types/RefundEvent";
 import * as BN from "bn.js";
 
 class BTCtoSolNewWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {

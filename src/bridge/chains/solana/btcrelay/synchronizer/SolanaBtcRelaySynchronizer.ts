@@ -1,7 +1,7 @@
 import {AnchorProvider, BN} from "@project-serum/anchor";
-import BtcRelay, {Header, StoredHeader} from "../BtcRelay";
-import ChainUtils, {BitcoinBlockHeader, BlockData} from "../../../ChainUtils";
-import {computeCommitedHeader, gtBuffer} from "./StatePredictor";
+import SolanaBtcRelay, {Header, StoredHeader} from "../SolanaBtcRelay";
+import ChainUtils, {BitcoinBlockHeader, BlockData} from "../../../../../ChainUtils";
+import {computeCommitedHeader, gtBuffer} from "./SolanaBtcRelayStatePredictor";
 import {SystemProgram, Transaction} from "@solana/web3.js";
 
 
@@ -10,12 +10,12 @@ const MAX_HEADERS_PER_TX_FORK = 6;
 
 const limit = 500;
 
-class BtcRelaySynchronizer {
+class SolanaBtcRelaySynchronizer {
 
     provider: AnchorProvider;
-    btcRelay: BtcRelay;
+    btcRelay: SolanaBtcRelay;
 
-    constructor(provider: AnchorProvider, btcRelay: BtcRelay) {
+    constructor(provider: AnchorProvider, btcRelay: SolanaBtcRelay) {
         this.provider = provider;
         this.btcRelay = btcRelay;
     }
@@ -149,7 +149,7 @@ class BtcRelaySynchronizer {
     }
 
     async saveMainHeaders(mainHeaders: BlockData[], storedHeader: StoredHeader) {
-        const blockHeaderObj = mainHeaders.map(BtcRelaySynchronizer.serializeBlockHeader);
+        const blockHeaderObj = mainHeaders.map(SolanaBtcRelaySynchronizer.serializeBlockHeader);
 
         console.log("[BTCRelay: Solana.submitMainChainHeaders] Submitting headers: ", blockHeaderObj);
 
@@ -185,7 +185,7 @@ class BtcRelaySynchronizer {
     }
 
     async saveNewForkHeaders(forkHeaders: BlockData[], storedHeader: StoredHeader, tipWork: Buffer) {
-        const blockHeaderObj = forkHeaders.map(BtcRelaySynchronizer.serializeBlockHeader);
+        const blockHeaderObj = forkHeaders.map(SolanaBtcRelaySynchronizer.serializeBlockHeader);
 
         const mainState: any = await this.btcRelay.program.account.mainState.fetch(this.btcRelay.BtcRelayMainState);
 
@@ -234,7 +234,7 @@ class BtcRelaySynchronizer {
     }
 
     async saveForkHeaders(forkHeaders: BlockData[], storedHeader: StoredHeader, forkId: number, tipWork: Buffer) {
-        const blockHeaderObj = forkHeaders.map(BtcRelaySynchronizer.serializeBlockHeader);
+        const blockHeaderObj = forkHeaders.map(SolanaBtcRelaySynchronizer.serializeBlockHeader);
 
         const tx = await this.btcRelay.program.methods
             .submitForkHeaders(
@@ -387,4 +387,4 @@ class BtcRelaySynchronizer {
 
 }
 
-export default BtcRelaySynchronizer;
+export default SolanaBtcRelaySynchronizer;

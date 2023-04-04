@@ -11,8 +11,8 @@ import {
     TransactionInstruction
 } from "@solana/web3.js";
 import {AnchorProvider, Program} from "@project-serum/anchor";
-import BtcRelay from "../../../btcrelay/BtcRelay";
-import BtcRelaySynchronizer from "../../../btcrelay/synchronizer/BtcRelaySynchronizer";
+import SolanaBtcRelay from "../btcrelay/SolanaBtcRelay";
+import SolanaBtcRelaySynchronizer from "../btcrelay/synchronizer/SolanaBtcRelaySynchronizer";
 import {createHash} from "crypto-browserify";
 import {
     getAssociatedTokenAddressSync,
@@ -42,8 +42,8 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
     program: Program;
     vaultAuthorityKey: PublicKey;
 
-    btcRelay: BtcRelay;
-    btcRelaySynchronizer: BtcRelaySynchronizer;
+    btcRelay: SolanaBtcRelay;
+    btcRelaySynchronizer: SolanaBtcRelaySynchronizer;
 
     getSwapDataKeyAlt(reversedTxId: Buffer, secretKey: Buffer): Signer {
         const buff = createHash("sha256").update(Buffer.concat([secretKey, reversedTxId])).digest();
@@ -74,8 +74,8 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
     constructor(provider: AnchorProvider, wbtcToken: PublicKey) {
         super(wbtcToken);
         this.provider = provider;
-        this.btcRelay = new BtcRelay(provider);
-        this.btcRelaySynchronizer = new BtcRelaySynchronizer(this.provider, this.btcRelay);
+        this.btcRelay = new SolanaBtcRelay(provider);
+        this.btcRelaySynchronizer = new SolanaBtcRelaySynchronizer(this.provider, this.btcRelay);
         this.program = new Program(programIdl, programIdl.metadata.address, this.provider);
         this.vaultAuthorityKey = PublicKey.findProgramAddressSync(
             [Buffer.from(AUTHORITY_SEED)],

@@ -1,21 +1,21 @@
-import SoltoBTCLNWrapper from "./tobtc/soltobtcln/SoltoBTCLNWrapper";
-import SoltoBTCWrapper from "./tobtc/soltobtc/SoltoBTCWrapper";
-import BTCLNtoSolWrapper from "./frombtc/btclntosol/BTCLNtoSolWrapper";
-import LocalWrapperStorage from "./LocalWrapperStorage";
+import SoltoBTCLNWrapper from "./swaps/tobtc/soltobtcln/SoltoBTCLNWrapper";
+import SoltoBTCWrapper from "./swaps/tobtc/soltobtc/SoltoBTCWrapper";
+import BTCLNtoSolWrapper from "./swaps/frombtc/btclntosol/BTCLNtoSolWrapper";
+import LocalWrapperStorage from "./storage/LocalWrapperStorage";
 import {AnchorProvider, BN} from "@project-serum/anchor";
-import ISwap from "./ISwap";
-import ISolToBTCxSwap from "./tobtc/ISolToBTCxSwap";
-import IBTCxtoSolSwap from "./frombtc/IBTCxtoSolSwap";
-import SoltoBTCSwap from "./tobtc/soltobtc/SoltoBTCSwap";
-import SoltoBTCLNSwap from "./tobtc/soltobtcln/SoltoBTCLNSwap";
-import BTCLNtoSolSwap from "./frombtc/btclntosol/BTCLNtoSolSwap"
+import ISwap from "./swaps/ISwap";
+import ISolToBTCxSwap from "./swaps/tobtc/ISolToBTCxSwap";
+import IBTCxtoSolSwap from "./swaps/frombtc/IBTCxtoSolSwap";
+import SoltoBTCSwap from "./swaps/tobtc/soltobtc/SoltoBTCSwap";
+import SoltoBTCLNSwap from "./swaps/tobtc/soltobtcln/SoltoBTCLNSwap";
+import BTCLNtoSolSwap from "./swaps/frombtc/btclntosol/BTCLNtoSolSwap"
 import * as bitcoin from "bitcoinjs-lib";
 import * as bolt11 from "bolt11";
-import SwapType from "./SwapType";
+import SwapType from "./swaps/SwapType";
 import {Bitcoin, ConstantBTCLNtoSol, ConstantBTCtoSol, ConstantSoltoBTC, ConstantSoltoBTCLN} from "../Constants";
 import {PublicKey} from "@solana/web3.js";
-import BTCtoSolNewWrapper from "./frombtc/btctosolNew/BTCtoSolNewWrapper";
-import BTCtoSolNewSwap from "./frombtc/btctosolNew/BTCtoSolNewSwap";
+import BTCtoSolNewWrapper from "./swaps/frombtc/btctosolNew/BTCtoSolNewWrapper";
+import BTCtoSolNewSwap from "./swaps/frombtc/btctosolNew/BTCtoSolNewSwap";
 import SolanaSwapData from "./chains/solana/swaps/SolanaSwapData";
 import SolanaClientSwapContract from "./chains/solana/swaps/SolanaClientSwapContract";
 import SolanaChainEvents from "./chains/solana/events/SolanaChainEvents";

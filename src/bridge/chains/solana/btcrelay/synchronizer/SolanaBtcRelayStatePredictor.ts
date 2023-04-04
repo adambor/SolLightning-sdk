@@ -1,4 +1,4 @@
-import {Header, StoredHeader} from "../BtcRelay";
+import {Header, StoredHeader} from "../SolanaBtcRelay";
 
 const DIFF_ADJUSTMENT_PERIOD = 2016;
 

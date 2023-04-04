@@ -2,7 +2,7 @@
 import IBTCxtoSolWrapper from "./IBTCxtoSolWrapper";
 import ISwap from "../ISwap";
 import * as BN from "bn.js";
-import SwapData from "../swaps/SwapData";
+import SwapData from "../SwapData";
 import * as EventEmitter from "events";
 import SwapType from "../SwapType";
 

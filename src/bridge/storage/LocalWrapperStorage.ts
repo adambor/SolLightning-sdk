@@ -1,6 +1,5 @@
-import BTCLNtoSolSwap from "./frombtc/btclntosol/BTCLNtoSolSwap";
 import IWrapperStorage from "./IWrapperStorage";
-import ISwap from "./ISwap";
+import ISwap from "../swaps/ISwap";
 
 export default class LocalWrapperStorage implements IWrapperStorage{
 

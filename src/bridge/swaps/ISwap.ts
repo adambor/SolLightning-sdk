@@ -1,6 +1,6 @@
-import {BN} from "@project-serum/anchor";
 import SwapType from "./SwapType";
 import {EventEmitter} from "events";
+import * as BN from "bn.js";
 
 interface ISwap {
 

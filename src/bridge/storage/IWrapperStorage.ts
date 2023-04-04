@@ -1,4 +1,4 @@
-import ISwap from "./ISwap";
+import ISwap from "../swaps/ISwap";
 
 export default interface IWrapperStorage {
 

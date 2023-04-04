@@ -1,13 +1,13 @@
 import ISolToBTCxSwap, {SolToBTCxSwapState} from "./ISolToBTCxSwap";
-import IWrapperStorage from "../IWrapperStorage";
-import SwapEvent from "../events/types/SwapEvent";
-import InitializeEvent from "../events/types/InitializeEvent";
-import ClaimEvent from "../events/types/ClaimEvent";
-import RefundEvent from "../events/types/RefundEvent";
-import SwapCommitStatus from "../swaps/SwapCommitStatus";
-import ClientSwapContract from "../swaps/ClientSwapContract";
-import ChainEvents from "../events/ChainEvents";
-import SwapData from "../swaps/SwapData";
+import IWrapperStorage from "../../storage/IWrapperStorage";
+import SwapEvent from "../../events/types/SwapEvent";
+import InitializeEvent from "../../events/types/InitializeEvent";
+import ClaimEvent from "../../events/types/ClaimEvent";
+import RefundEvent from "../../events/types/RefundEvent";
+import SwapCommitStatus from "../SwapCommitStatus";
+import ClientSwapContract from "../ClientSwapContract";
+import ChainEvents from "../../events/ChainEvents";
+import SwapData from "../SwapData";
 import * as BN from "bn.js";
 import * as EventEmitter from "events";
 

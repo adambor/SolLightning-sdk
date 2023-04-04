@@ -1,18 +1,18 @@
-import IBTCxtoSolWrapper from "./bridge/frombtc/IBTCxtoSolWrapper";
-import ISoltoBTCxWrapper from "./bridge/tobtc/ISolToBTCxWrapper";
-import SwapType from "./bridge/SwapType";
+import IBTCxtoSolWrapper from "./bridge/swaps/frombtc/IBTCxtoSolWrapper";
+import ISoltoBTCxWrapper from "./bridge/swaps/tobtc/ISolToBTCxWrapper";
+import SwapType from "./bridge/swaps/SwapType";
 import Swapper from "./bridge/Swapper";
 
-import {BTCxtoSolSwapState} from "./bridge/frombtc/IBTCxtoSolSwap";
-import {SolToBTCxSwapState} from "./bridge/tobtc/ISolToBTCxSwap";
+import {BTCxtoSolSwapState} from "./bridge/swaps/frombtc/IBTCxtoSolSwap";
+import {SolToBTCxSwapState} from "./bridge/swaps/tobtc/ISolToBTCxSwap";
 
-import ISwap from "./bridge/ISwap";
-import IBTCxtoSolSwap from "./bridge/frombtc/IBTCxtoSolSwap";
-import ISoltoBTCxSwap from "./bridge/tobtc/ISolToBTCxSwap";
-import BTCLNtoSolSwap from "./bridge/frombtc/btclntosol/BTCLNtoSolSwap";
-import BTCtoSolNewSwap, {BTCtoSolNewSwapState} from "./bridge/frombtc/btctosolNew/BTCtoSolNewSwap";
-import SoltoBTCLNSwap from "./bridge/tobtc/soltobtcln/SoltoBTCLNSwap";
-import SoltoBTCSwap from "./bridge/tobtc/soltobtc/SoltoBTCSwap";
+import ISwap from "./bridge/swaps/ISwap";
+import IBTCxtoSolSwap from "./bridge/swaps/frombtc/IBTCxtoSolSwap";
+import ISoltoBTCxSwap from "./bridge/swaps/tobtc/ISolToBTCxSwap";
+import BTCLNtoSolSwap from "./bridge/swaps/frombtc/btclntosol/BTCLNtoSolSwap";
+import BTCtoSolNewSwap, {BTCtoSolNewSwapState} from "./bridge/swaps/frombtc/btctosolNew/BTCtoSolNewSwap";
+import SoltoBTCLNSwap from "./bridge/swaps/tobtc/soltobtcln/SoltoBTCLNSwap";
+import SoltoBTCSwap from "./bridge/swaps/tobtc/soltobtc/SoltoBTCSwap";
 import SwapData from "./bridge/swaps/SwapData";
 import SolanaSwapData from "./bridge/chains/solana/swaps/SolanaSwapData";
 

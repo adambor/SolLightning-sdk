@@ -2,7 +2,7 @@ import * as bolt11 from "bolt11";
 import BTCLNtoSolWrapper from "./BTCLNtoSolWrapper";
 import IBTCxtoSolSwap, {BTCxtoSolSwapState} from "../IBTCxtoSolSwap";
 import SwapType from "../../SwapType";
-import SwapData from "../../swaps/SwapData";
+import SwapData from "../../SwapData";
 import * as BN from "bn.js";
 
 export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T> {

@@ -7,6 +7,7 @@ import SwapData from "../../SwapData";
 import ClientSwapContract from "../../ClientSwapContract";
 import ChainEvents from "../../../events/ChainEvents";
 import * as BN from "bn.js";
+import UserError from "../../../errors/UserError";
 
 class SoltoBTCLNWrapper<T extends SwapData> extends ISolToBTCxWrapper<T> {
 
@@ -42,7 +43,7 @@ class SoltoBTCLNWrapper<T extends SwapData> extends ISolToBTCxWrapper<T> {
         const parsedPR = bolt11.decode(bolt11PayRequest);
 
         if(parsedPR.satoshis==null) {
-            throw new Error("Must be an invoice with amount!");
+            throw new UserError("Must be an invoice with amount!");
         }
 
         const sats = new BN(parsedPR.millisatoshis).div(new BN(1000));

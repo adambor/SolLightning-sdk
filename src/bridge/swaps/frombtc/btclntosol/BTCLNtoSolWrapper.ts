@@ -13,6 +13,7 @@ import RefundEvent from "../../../events/types/RefundEvent";
 import * as BN from "bn.js";
 import * as bolt11 from "bolt11";
 import SwapCommitStatus from "../../SwapCommitStatus";
+import IntermediaryError from "../../../errors/IntermediaryError";
 
 class BTCLNtoSolWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {
 
@@ -48,7 +49,7 @@ class BTCLNtoSolWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {
         if(requiredKey!=null) {
             const liquidity = await this.contract.getIntermediaryBalance(requiredKey);
             if(liquidity.lt(total)) {
-                throw new Error("Intermediary doesn't have enough liquidity");
+                throw new IntermediaryError("Intermediary doesn't have enough liquidity");
             }
         }
 

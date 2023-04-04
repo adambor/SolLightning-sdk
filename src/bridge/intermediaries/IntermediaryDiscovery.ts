@@ -266,6 +266,15 @@ class IntermediaryDiscovery<T extends SwapData> {
 
     }
 
+    removeIntermediary(intermediary: Intermediary): boolean {
+        const index = this.intermediaries.indexOf(intermediary);
+        if(index>=0) {
+            this.intermediaries.splice(index, 1);
+            return true;
+        }
+        return false;
+    }
+
 }
 
 export default IntermediaryDiscovery;

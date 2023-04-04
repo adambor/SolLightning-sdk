@@ -30,6 +30,7 @@ import ChainUtils from "../../../../ChainUtils";
 import * as bitcoin from "bitcoinjs-lib";
 import {programIdl} from "./programIdl";
 import ChainSwapType from "../../../swaps/ChainSwapType";
+import SignatureVerificationError from "../../../errors/SignatureVerificationError";
 
 const STATE_SEED = "state";
 const VAULT_SEED = "vault";
@@ -274,7 +275,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
     isValidAuthorization(data: SolanaSwapData, timeout: string, prefix: string, signature: string): Promise<Buffer> {
 
         if(prefix!=="refund") {
-            throw new Error("Invalid prefix");
+            throw new SignatureVerificationError("Invalid prefix");
         }
 
         const expiryTimestamp = new BN(timeout);
@@ -283,7 +284,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const isExpired = expiryTimestamp.sub(currentTimestamp).lt(new BN(ConstantSoltoBTCLN.authorizationGracePeriod));
 
         if (isExpired) {
-            throw new Error("Authorization expired!");
+            throw new SignatureVerificationError("Authorization expired!");
         }
 
         const messageBuffers = [
@@ -298,7 +299,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const messageBuffer = Buffer.concat(messageBuffers);
 
         if(!sign.detached.verify(messageBuffer, signatureBuffer, data.intermediary.toBuffer())) {
-            throw new Error("Invalid signature!");
+            throw new SignatureVerificationError("Invalid signature!");
         }
 
         return Promise.resolve(messageBuffer);
@@ -313,7 +314,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
     async isValidInitPayInAuthorization(data: SolanaSwapData, timeout: string, prefix: string, signature: string, nonce: number): Promise<Buffer> {
 
         if(prefix!=="claim_initialize") {
-            throw new Error("Invalid prefix");
+            throw new SignatureVerificationError("Invalid prefix");
         }
 
         const expiryTimestamp = new BN(timeout);
@@ -322,14 +323,14 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const isExpired = expiryTimestamp.sub(currentTimestamp).lt(new BN(ConstantSoltoBTCLN.authorizationGracePeriod));
 
         if (isExpired) {
-            throw new Error("Authorization expired!");
+            throw new SignatureVerificationError("Authorization expired!");
         }
 
         //Check correctness of nonce
         const userAccount: any = await this.program.account.userAccount.fetch(this.getUserVaultKey(data.intermediary, data.token));
 
         if(nonce<=userAccount.claimNonce.toNumber()) {
-            throw new Error("Invalid nonce!");
+            throw new SignatureVerificationError("Invalid nonce!");
         }
 
         const messageBuffers = [
@@ -355,7 +356,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const messageBuffer = Buffer.concat(messageBuffers);
 
         if(!sign.detached.verify(messageBuffer, signatureBuffer, data.intermediary.toBuffer())) {
-            throw new Error("Invalid signature!");
+            throw new SignatureVerificationError("Invalid signature!");
         }
 
         return messageBuffer;
@@ -365,7 +366,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
     async isValidInitAuthorization(data: SolanaSwapData, timeout: string, prefix: string, signature: string, nonce: number): Promise<Buffer> {
 
         if(prefix!=="initialize") {
-            throw new Error("Invalid prefix");
+            throw new SignatureVerificationError("Invalid prefix");
         }
 
         const expiryTimestamp = new BN(timeout);
@@ -374,20 +375,20 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const isExpired = expiryTimestamp.sub(currentTimestamp).lt(new BN(ConstantBTCLNtoSol.authorizationGracePeriod));
 
         if (isExpired) {
-            throw new Error("Authorization expired!");
+            throw new SignatureVerificationError("Authorization expired!");
         }
 
         const swapWillExpireTooSoon = data.expiry.sub(currentTimestamp).lt(new BN(ConstantBTCLNtoSol.authorizationGracePeriod).add(new BN(ConstantBTCLNtoSol.claimGracePeriod)));
 
         if (swapWillExpireTooSoon) {
-            throw new Error("Swap will expire too soon!");
+            throw new SignatureVerificationError("Swap will expire too soon!");
         }
 
         //Check correctness of nonce
         const userAccount: any = await this.program.account.userAccount.fetch(this.getUserVaultKey(data.offerer, data.token));
 
         if(nonce<=userAccount.nonce.toNumber()) {
-            throw new Error("Invalid nonce!");
+            throw new SignatureVerificationError("Invalid nonce!");
         }
 
         const messageBuffers = [
@@ -407,7 +408,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const messageBuffer = Buffer.concat(messageBuffers);
 
         if(!sign.detached.verify(messageBuffer, signatureBuffer, data.offerer.toBuffer())) {
-            throw new Error("Invalid signature!");
+            throw new SignatureVerificationError("Invalid signature!");
         }
 
         return messageBuffer;

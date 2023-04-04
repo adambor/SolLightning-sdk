@@ -9,6 +9,9 @@ import fetch, {Response} from "cross-fetch";
 import {createHash, randomBytes} from "crypto-browserify";
 import * as bolt11 from "bolt11";
 import ChainUtils, {BitcoinTransaction} from "../../ChainUtils";
+import UserError from "../errors/UserError";
+import IntermediaryError from "../errors/IntermediaryError";
+import SignatureVerificationError from "../errors/SignatureVerificationError";
 
 export class PaymentAuthError extends Error {
 
@@ -97,7 +100,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         try {
             outputScript = bitcoin.address.toOutputScript(address, ConstantSoltoBTC.network);
         } catch (e) {
-            throw new Error("Invalid address specified");
+            throw new UserError("Invalid address specified");
         }
 
         const hash = ClientSwapContract.getHashForOnchain(outputScript, amount, nonce).toString("hex");
@@ -107,7 +110,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         const payStatus = await this.getPaymentHashStatus(hash);
 
         if(payStatus!==SwapCommitStatus.NOT_COMMITED) {
-            throw new Error("Invoice already being paid for or paid");
+            throw new UserError("Invoice already being paid for or paid");
         }
 
         const response: Response = await fetch(url+"/payInvoice", {
@@ -139,13 +142,13 @@ abstract class ClientSwapContract<T extends SwapData> {
         const totalFee = new BN(jsonBody.data.totalFee);
 
         if(!totalFee.eq(swapFee.add(networkFee))){
-            throw new Error("Invalid totalFee returned");
+            throw new IntermediaryError("Invalid totalFee returned");
         }
 
         const total = new BN(jsonBody.data.total);
 
         if(!total.eq(amount.add(totalFee))){
-            throw new Error("Invalid total returned");
+            throw new IntermediaryError("Invalid total returned");
         }
 
         const data: T = SwapData.deserialize<T>(jsonBody.data.data);
@@ -159,14 +162,21 @@ abstract class ClientSwapContract<T extends SwapData> {
             data.getConfirmations()!==confirmations ||
             data.getType()!==ChainSwapType.CHAIN_NONCED
         ) {
-            throw new Error("Invalid data returned");
+            throw new IntermediaryError("Invalid data returned");
         }
 
         if(requiredClaimerKey!=null) {
-            if(data.getClaimer()!==requiredClaimerKey) throw new Error("Invalid data returned");
+            if(data.getClaimer()!==requiredClaimerKey) throw new IntermediaryError("Invalid data returned");
         }
 
-        await this.isValidInitPayInAuthorization(data, jsonBody.data.timeout, jsonBody.data.prefix, jsonBody.data.signature, jsonBody.data.nonce);
+        try {
+            await this.isValidInitPayInAuthorization(data, jsonBody.data.timeout, jsonBody.data.prefix, jsonBody.data.signature, jsonBody.data.nonce);
+        } catch (e) {
+            if(e instanceof SignatureVerificationError) {
+                throw new IntermediaryError(e.message);
+            }
+            throw e;
+        }
 
         return {
             networkFee: new BN(jsonBody.data.networkFee),
@@ -192,13 +202,13 @@ abstract class ClientSwapContract<T extends SwapData> {
         const parsedPR = bolt11.decode(bolt11PayReq);
 
         if(parsedPR.satoshis==null) {
-            throw new Error("Must be an invoice with amount");
+            throw new UserError("Must be an invoice with amount");
         }
 
         const payStatus = await this.getPaymentHashStatus(parsedPR.tagsObject.payment_hash);
 
         if(payStatus!==SwapCommitStatus.NOT_COMMITED) {
-            throw new Error("Invoice already being paid for or paid");
+            throw new UserError("Invoice already being paid for or paid");
         }
 
         const sats: BN = new BN(parsedPR.satoshis);
@@ -233,7 +243,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         const total = new BN(jsonBody.data.total);
 
         if(!total.eq(sats.add(totalFee))){
-            throw new Error("Invalid total returned");
+            throw new IntermediaryError("Invalid total returned");
         }
 
         const data: T = SwapData.deserialize<T>(jsonBody.data.data);
@@ -242,38 +252,45 @@ abstract class ClientSwapContract<T extends SwapData> {
         console.log("Parsed data: ", data);
 
         if(!data.isToken(this.WBTC_ADDRESS)) {
-            throw new Error("Invalid data returned - token");
+            throw new IntermediaryError("Invalid data returned - token");
         }
 
         if(!data.getAmount().eq(total)) {
-            throw new Error("Invalid data returned - amount");
+            throw new IntermediaryError("Invalid data returned - amount");
         }
 
         if(data.getHash()!==parsedPR.tagsObject.payment_hash) {
-            throw new Error("Invalid data returned - paymentHash");
+            throw new IntermediaryError("Invalid data returned - paymentHash");
         }
 
         if(!data.getEscrowNonce().eq(new BN(0))) {
-            throw new Error("Invalid data returned - nonce");
+            throw new IntermediaryError("Invalid data returned - nonce");
         }
 
         if(data.getConfirmations()!==0) {
-            throw new Error("Invalid data returned - confirmations");
+            throw new IntermediaryError("Invalid data returned - confirmations");
         }
 
         if(!data.getExpiry().eq(new BN(expiryTimestamp))) {
-            throw new Error("Invalid data returned - expiry");
+            throw new IntermediaryError("Invalid data returned - expiry");
         }
 
         if(data.getType()!==ChainSwapType.HTLC) {
-            throw new Error("Invalid data returned - type");
+            throw new IntermediaryError("Invalid data returned - type");
         }
 
         if(requiredClaimerKey!=null) {
-            if(data.getClaimer()!==requiredClaimerKey) throw new Error("Invalid data returned");
+            if(data.getClaimer()!==requiredClaimerKey) throw new IntermediaryError("Invalid data returned");
         }
 
-        await this.isValidInitPayInAuthorization(data, jsonBody.data.timeout, jsonBody.data.prefix, jsonBody.data.signature, jsonBody.data.nonce);
+        try {
+            await this.isValidInitPayInAuthorization(data, jsonBody.data.timeout, jsonBody.data.prefix, jsonBody.data.signature, jsonBody.data.nonce);
+        } catch (e) {
+            if(e instanceof SignatureVerificationError) {
+                throw new IntermediaryError(e.message);
+            }
+            throw e;
+        }
 
         return {
             confidence: jsonBody.data.confidence,
@@ -347,8 +364,7 @@ abstract class ClientSwapContract<T extends SwapData> {
                     ClientSwapContract.getHashForOnchain(Buffer.from(e.scriptpubkey, "hex"), new BN(e.value), data.getEscrowNonce()).equals(paymentHashBuffer));
 
                 if(foundVout==null) {
-                    console.error("Invalid btc txId returned, dishonest node?");
-                    return null;
+                    throw new IntermediaryError("Invalid btc txId returned");
                 }
             } else if(secret!=null) {
 
@@ -358,8 +374,7 @@ abstract class ClientSwapContract<T extends SwapData> {
                 const paymentHashBuffer = Buffer.from(data.getHash(), "hex");
 
                 if(!hash.equals(paymentHashBuffer)) {
-                    console.error("Invalid payment secret returned, dishonest node?");
-                    return null;
+                    throw new IntermediaryError("Invalid payment secret returned");
                 }
             }
 
@@ -372,7 +387,14 @@ abstract class ClientSwapContract<T extends SwapData> {
 
         if(jsonBody.code===20000) {
             //Success
-            await this.isValidAuthorization(data, jsonBody.data.timeout, jsonBody.data.prefix, jsonBody.data.signature);
+            try {
+                await this.isValidAuthorization(data, jsonBody.data.timeout, jsonBody.data.prefix, jsonBody.data.signature);
+            } catch (e) {
+                if(e instanceof SignatureVerificationError) {
+                    throw new IntermediaryError(e.message);
+                }
+                throw e;
+            }
 
             return {
                 is_paid: false,
@@ -438,28 +460,28 @@ abstract class ClientSwapContract<T extends SwapData> {
         data.setClaimer(this.getAddress());
 
         if(data.getConfirmations()>ConstantBTCtoSol.maxConfirmations) {
-            throw new Error("Requires too many confirmations");
+            throw new IntermediaryError("Requires too many confirmations");
         }
 
         if(data.getType()!=ChainSwapType.CHAIN) {
-            throw new Error("Invalid type of the swap");
+            throw new IntermediaryError("Invalid type of the swap");
         }
 
         const swapFee = new BN(jsonBody.data.swapFee);
         const total = amount.sub(swapFee);
 
         if(!data.getAmount().eq(total)) {
-            throw new Error("Invalid data returned - amount");
+            throw new IntermediaryError("Invalid data returned - amount");
         }
 
         if(!data.isToken(this.WBTC_ADDRESS)) {
-            throw new Error("Invalid data returned - token");
+            throw new IntermediaryError("Invalid data returned - token");
         }
 
         //Get intermediary's liquidity
         const liquidity = await this.getIntermediaryBalance(data.getOfferer(), data.getToken());
         if(liquidity.lt(data.getAmount())) {
-            throw new Error("Intermediary doesn't have enough liquidity to honor the swap");
+            throw new IntermediaryError("Intermediary doesn't have enough liquidity to honor the swap");
         }
 
         //Check that we have enough time to send the TX and for it to confirm
@@ -467,7 +489,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         const currentTimestamp = new BN(Math.floor(Date.now()/1000));
 
         if(expiry.sub(currentTimestamp).lt(new BN(ConstantBTCtoSol.minSendWindow))) {
-            throw new Error("Send window too low");
+            throw new IntermediaryError("Send window too low");
         }
 
         const lockingScript = bitcoin.address.toOutputScript(jsonBody.data.btcAddress, ConstantBTCtoSol.network);
@@ -480,13 +502,20 @@ abstract class ClientSwapContract<T extends SwapData> {
 
         const suppliedHash = Buffer.from(jsonBody.data.data.paymentHash,"hex");
 
-        if(!desiredHash.equals(suppliedHash)) throw new Error("Invalid payment hash returned!");
+        if(!desiredHash.equals(suppliedHash)) throw new IntermediaryError("Invalid payment hash returned!");
 
         if(requiredOffererKey!=null) {
-            if(data.getOfferer()!==requiredOffererKey) throw new Error("Invalid data returned");
+            if(data.getOfferer()!==requiredOffererKey) throw new IntermediaryError("Invalid data returned");
         }
 
-        await this.isValidInitAuthorization(data, jsonBody.data.timeout, jsonBody.data.prefix, jsonBody.data.signature, jsonBody.data.nonce);
+        try {
+            await this.isValidInitAuthorization(data, jsonBody.data.timeout, jsonBody.data.prefix, jsonBody.data.signature, jsonBody.data.nonce);
+        } catch (e) {
+            if(e instanceof SignatureVerificationError) {
+                throw new IntermediaryError(e.message);
+            }
+            throw e;
+        }
 
         return {
             address: jsonBody.data.btcAddress,
@@ -535,7 +564,7 @@ abstract class ClientSwapContract<T extends SwapData> {
 
         const decodedPR = bolt11.decode(jsonBody.data.pr);
 
-        if(!new BN(decodedPR.millisatoshis).div(new BN(1000)).eq(amount)) throw new Error("Invalid payment request returned, amount mismatch");
+        if(!new BN(decodedPR.millisatoshis).div(new BN(1000)).eq(amount)) throw new IntermediaryError("Invalid payment request returned, amount mismatch");
 
         return {
             secret,
@@ -588,13 +617,13 @@ abstract class ClientSwapContract<T extends SwapData> {
             if(requiredOffererKey!=null) {
                 if (data.getOfferer()!==requiredOffererKey) {
                     console.error("[SmartChain.PaymentRequest] Invalid offerer used");
-                    throw new PaymentAuthError("Invalid offerer used");
+                    throw new IntermediaryError("Invalid offerer used");
                 }
             }
 
             if (!data.isToken(this.WBTC_ADDRESS)) {
                 console.error("[EVM.PaymentRequest] Invalid token used");
-                throw new PaymentAuthError("Invalid token used");
+                throw new IntermediaryError("Invalid token used");
             }
 
 
@@ -606,7 +635,7 @@ abstract class ClientSwapContract<T extends SwapData> {
 
             if(paymentHashInTx!==paymentHash.toLowerCase()) {
                 console.error("[EVM.PaymentRequest] lightning payment request mismatch");
-                throw (new PaymentAuthError("Lightning payment request mismatch"));
+                throw (new IntermediaryError("Lightning payment request mismatch"));
             }
 
             const tokenAmount = data.getAmount();
@@ -616,7 +645,7 @@ abstract class ClientSwapContract<T extends SwapData> {
             if(minOut!=null) {
                 if (tokenAmount.lt(minOut)) {
                     console.error("[EVM.PaymentRequest] Not enough offered!");
-                    throw (new PaymentAuthError("Not enough offered!"));
+                    throw (new IntermediaryError("Not enough offered!"));
                 }
             }
 

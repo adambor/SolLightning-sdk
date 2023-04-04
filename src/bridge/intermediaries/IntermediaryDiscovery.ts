@@ -240,7 +240,7 @@ class IntermediaryDiscovery<T extends SwapData> {
         return max;
     }
 
-    getSwapCandidates(swapType: SwapType, amount: BN, count: number): Intermediary[] {
+    getSwapCandidates(swapType: SwapType, amount: BN, count?: number): Intermediary[] {
 
         const candidates = this.intermediaries.filter(e => {
             const swapService = e.services[swapType];
@@ -251,6 +251,10 @@ class IntermediaryDiscovery<T extends SwapData> {
         });
 
         candidates.sort(getIntermediaryComparator(swapType, amount));
+
+        if(count==null) {
+            return candidates;
+        }
 
         const result = [];
 

@@ -1,34 +1,31 @@
-import SoltoBTCLNWrapper from "./soltobtcln/SoltoBTCLNWrapper";
-import SoltoBTCWrapper from "./soltobtc/SoltoBTCWrapper";
-import BTCtoSolWrapper from "./btctosol/BTCtoSolWrapper";
-import BTCLNtoSolWrapper from "./btclntosol/BTCLNtoSolWrapper";
+import SoltoBTCLNWrapper from "./tobtc/soltobtcln/SoltoBTCLNWrapper";
+import SoltoBTCWrapper from "./tobtc/soltobtc/SoltoBTCWrapper";
+import BTCLNtoSolWrapper from "./frombtc/btclntosol/BTCLNtoSolWrapper";
 import LocalWrapperStorage from "./LocalWrapperStorage";
 import {AnchorProvider, BN} from "@project-serum/anchor";
 import ISwap from "./ISwap";
-import ISolToBTCxSwap from "./ISolToBTCxSwap";
-import IBTCxtoSolSwap from "./IBTCxtoSolSwap";
-import SoltoBTCSwap from "./soltobtc/SoltoBTCSwap";
-import SoltoBTCLNSwap from "./soltobtcln/SoltoBTCLNSwap";
-import BTCtoSolSwap from "./btctosol/BTCtoSolSwap";
-import BTCLNtoSolSwap from "./btclntosol/BTCLNtoSolSwap"
+import ISolToBTCxSwap from "./tobtc/ISolToBTCxSwap";
+import IBTCxtoSolSwap from "./frombtc/IBTCxtoSolSwap";
+import SoltoBTCSwap from "./tobtc/soltobtc/SoltoBTCSwap";
+import SoltoBTCLNSwap from "./tobtc/soltobtcln/SoltoBTCLNSwap";
+import BTCLNtoSolSwap from "./frombtc/btclntosol/BTCLNtoSolSwap"
 import * as bitcoin from "bitcoinjs-lib";
 import * as bolt11 from "bolt11";
 import SwapType from "./SwapType";
 import {Bitcoin, ConstantBTCLNtoSol, ConstantBTCtoSol, ConstantSoltoBTC, ConstantSoltoBTCLN} from "../Constants";
 import {PublicKey} from "@solana/web3.js";
-import BTCtoSolNewWrapper from "./btctosolNew/BTCtoSolNewWrapper";
-import BTCtoSolNewSwap from "./btctosolNew/BTCtoSolNewSwap";
+import BTCtoSolNewWrapper from "./frombtc/btctosolNew/BTCtoSolNewWrapper";
+import BTCtoSolNewSwap from "./frombtc/btctosolNew/BTCtoSolNewSwap";
+import SolanaSwapData from "./chains/solana/swaps/SolanaSwapData";
+import SolanaClientSwapContract from "./chains/solana/swaps/SolanaClientSwapContract";
+import SolanaChainEvents from "./chains/solana/events/SolanaChainEvents";
 
-export default class Swapper {
+export default class SolanaSwapper {
 
-    soltobtcln: SoltoBTCLNWrapper;
-    soltobtc: SoltoBTCWrapper;
-    btclntosol: BTCLNtoSolWrapper;
-    btctosol: BTCtoSolNewWrapper;
-
-    private readonly ports: {
-        [key in SwapType]: number
-    };
+    soltobtcln: SoltoBTCLNWrapper<SolanaSwapData>;
+    soltobtc: SoltoBTCWrapper<SolanaSwapData>;
+    btclntosol: BTCLNtoSolWrapper<SolanaSwapData>;
+    btctosol: BTCtoSolNewWrapper<SolanaSwapData>;
 
     private readonly intermediaryUrl: string;
 
@@ -59,26 +56,14 @@ export default class Swapper {
         return false;
     }
 
-    constructor(provider: AnchorProvider, intermediaryUrl: string, customPorts?: {
-        [key in SwapType]?: number
-    }, wbtcToken?: PublicKey) {
-        this.soltobtcln = new SoltoBTCLNWrapper(new LocalWrapperStorage("solSwaps-SoltoBTCLN"), provider, wbtcToken==null ? Bitcoin.wbtcToken : wbtcToken);
-        this.soltobtc = new SoltoBTCWrapper(new LocalWrapperStorage("solSwaps-SoltoBTC"), provider, wbtcToken==null ? Bitcoin.wbtcToken : wbtcToken);
-        this.btclntosol = new BTCLNtoSolWrapper(new LocalWrapperStorage("solSwaps-BTCLNtoSol"), provider, wbtcToken==null ? Bitcoin.wbtcToken : wbtcToken);
-        this.btctosol = new BTCtoSolNewWrapper(new LocalWrapperStorage("solSwaps-BTCtoSol"), provider, wbtcToken==null ? Bitcoin.wbtcToken : wbtcToken);
+    constructor(provider: AnchorProvider, intermediaryUrl: string, wbtcToken?: PublicKey) {
+        const swapContract = new SolanaClientSwapContract(provider, wbtcToken || Bitcoin.wbtcToken);
+        const chainEvents = new SolanaChainEvents(provider, swapContract);
 
-        const ports = {
-            [SwapType.BTCLN_TO_SOL]: 4000,
-            [SwapType.SOL_TO_BTCLN]: 4001,
-            [SwapType.BTC_TO_SOL]: 4002,
-            [SwapType.SOL_TO_BTC]: 4003,
-        };
-
-        if(customPorts!=null) for(let key in customPorts) {
-            ports[key] = customPorts[key];
-        }
-
-        this.ports = ports;
+        this.soltobtcln = new SoltoBTCLNWrapper(new LocalWrapperStorage("solSwaps-SoltoBTCLN"), swapContract, chainEvents);
+        this.soltobtc = new SoltoBTCWrapper(new LocalWrapperStorage("solSwaps-SoltoBTC"), swapContract, chainEvents);
+        this.btclntosol = new BTCLNtoSolWrapper(new LocalWrapperStorage("solSwaps-BTCLNtoSol"), swapContract, chainEvents);
+        this.btctosol = new BTCtoSolNewWrapper(new LocalWrapperStorage("solSwaps-BTCtoSol"), swapContract, chainEvents);
 
         this.intermediaryUrl = intermediaryUrl;
     }
@@ -150,8 +135,8 @@ export default class Swapper {
      * @param confirmationTarget    How soon should the transaction be confirmed (determines the fee)
      * @param confirmations         How many confirmations must the intermediary wait to claim the funds
      */
-    createSolToBTCSwap(address: string, amount: BN, confirmationTarget?: number, confirmations?: number): Promise<SoltoBTCSwap> {
-        return this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, this.intermediaryUrl+":"+this.ports[SwapType.SOL_TO_BTC]);
+    createSolToBTCSwap(address: string, amount: BN, confirmationTarget?: number, confirmations?: number): Promise<SoltoBTCSwap<SolanaSwapData>> {
+        return this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, this.intermediaryUrl+"/tobtc");
     }
 
     /**
@@ -160,8 +145,8 @@ export default class Swapper {
      * @param paymentRequest        BOLT11 lightning network invoice to be paid (needs to have a fixed amount)
      * @param expirySeconds         For how long to lock your funds (higher expiry means higher probability of payment success)
      */
-    createSolToBTCLNSwap(paymentRequest: string, expirySeconds?: number): Promise<SoltoBTCLNSwap> {
-        return this.soltobtcln.create(paymentRequest, expirySeconds || (3*24*3600), this.intermediaryUrl+":"+this.ports[SwapType.SOL_TO_BTCLN]);
+    createSolToBTCLNSwap(paymentRequest: string, expirySeconds?: number): Promise<SoltoBTCLNSwap<SolanaSwapData>> {
+        return this.soltobtcln.create(paymentRequest, expirySeconds || (3*24*3600), this.intermediaryUrl+"/tobtcln");
     }
 
     /**
@@ -169,8 +154,8 @@ export default class Swapper {
      *
      * @param amount        Amount to receive, in satoshis (bitcoin's smallest denomination)
      */
-    createBTCtoSolSwap(amount: BN): Promise<BTCtoSolNewSwap> {
-        return this.btctosol.create(amount, this.intermediaryUrl+":"+this.ports[SwapType.BTC_TO_SOL]);
+    createBTCtoSolSwap(amount: BN): Promise<BTCtoSolNewSwap<SolanaSwapData>> {
+        return this.btctosol.create(amount, this.intermediaryUrl+"/frombtc");
     }
 
     /**
@@ -179,8 +164,8 @@ export default class Swapper {
      * @param amount            Amount to receive, in satoshis (bitcoin's smallest denomination)
      * @param invoiceExpiry     Lightning invoice expiry time (in seconds)
      */
-    createBTCLNtoSolSwap(amount: BN, invoiceExpiry?: number): Promise<BTCLNtoSolSwap> {
-        return this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), this.intermediaryUrl+":"+this.ports[SwapType.BTCLN_TO_SOL]);
+    createBTCLNtoSolSwap(amount: BN, invoiceExpiry?: number): Promise<BTCLNtoSolSwap<SolanaSwapData>> {
+        return this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), this.intermediaryUrl+"/frombtcln");
     }
 
     /**
@@ -210,7 +195,7 @@ export default class Swapper {
     /**
      * Returns swaps that are refundable and that were initiated with the current provider's public key
      */
-    async getRefundableSwaps(): Promise<ISolToBTCxSwap[]> {
+    async getRefundableSwaps(): Promise<ISolToBTCxSwap<SolanaSwapData>[]> {
         return [].concat(
             await this.soltobtcln.getRefundableSwaps(),
             await this.soltobtc.getRefundableSwaps()
@@ -220,7 +205,7 @@ export default class Swapper {
     /**
      * Returns swaps that are in-progress and are claimable that were initiated with the current provider's public key
      */
-    async getClaimableSwaps(): Promise<IBTCxtoSolSwap[]> {
+    async getClaimableSwaps(): Promise<IBTCxtoSolSwap<SolanaSwapData>[]> {
         return [].concat(
             await this.btclntosol.getClaimableSwaps(),
             await this.btctosol.getClaimableSwaps()

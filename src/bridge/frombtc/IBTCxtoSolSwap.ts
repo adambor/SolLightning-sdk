@@ -1,27 +1,79 @@
-import {AnchorProvider, BN} from "@project-serum/anchor";
-import {TransactionSignature} from "@solana/web3.js";
-import ISolToBTCxWrapper from "./tobtc/ISolToBTCxWrapper";
-import {EventEmitter} from "events";
+
 import IBTCxtoSolWrapper from "./IBTCxtoSolWrapper";
-import ISwap from "./ISwap";
+import ISwap from "../ISwap";
+import * as BN from "bn.js";
+import SwapData from "../swaps/SwapData";
+import * as EventEmitter from "events";
+import SwapType from "../SwapType";
 
 
-interface IBTCxtoSolSwap extends ISwap {
+abstract class IBTCxtoSolSwap<T extends SwapData> implements ISwap {
+
+    readonly url: string;
+
+    //State: PR_PAID
+    data: T;
+    prefix: string;
+    timeout: string;
+    signature: string;
+    nonce: number;
+
+    protected readonly wrapper: IBTCxtoSolWrapper<T>;
+
+    /**
+     * Swap's event emitter
+     *
+     * @event IBTCxtoSolSwap<T>#swapState
+     * @type {IBTCxtoSolSwap<T>}
+     */
+    readonly events: EventEmitter;
+
+    protected constructor(
+        wrapper: IBTCxtoSolWrapper<T>,
+        urlOrObject?: string | any,
+        data?: T,
+        prefix?: string,
+        timeout?: string,
+        signature?: string,
+        nonce?: number,
+    ) {
+        this.wrapper = wrapper;
+        this.events = new EventEmitter();
+        if(typeof(urlOrObject)==="string") {
+            this.url = urlOrObject;
+
+            this.data = data;
+            this.prefix = prefix;
+            this.timeout = timeout;
+            this.signature = signature;
+            this.nonce = nonce;
+        } else {
+            this.url = urlOrObject.url;
+
+            this.data = urlOrObject.data !=null ? SwapData.deserialize<T>(urlOrObject.data) : null;
+            this.prefix = urlOrObject.prefix;
+            this.timeout = urlOrObject.timeout;
+            this.signature = urlOrObject.signature;
+            this.nonce = urlOrObject.nonce;
+        }
+    }
 
     /**
      * Returns amount that will be received on Solana
      */
-    getOutAmount(): BN;
+    abstract getOutAmount(): BN;
 
     /**
      * Returns amount that will be sent on Bitcoin on-chain
      */
-    getInAmount(): BN;
+    abstract getInAmount(): BN;
 
     /**
      * Returns calculated fee for the swap
      */
-    getFee(): BN;
+    getFee(): BN {
+        return this.getInAmount().sub(this.getOutAmount());
+    }
 
     /**
      * A blocking promise resolving when payment was received by the intermediary and client can continue
@@ -31,50 +83,48 @@ interface IBTCxtoSolSwap extends ISwap {
      * @param checkIntervalSeconds  How often to poll the intermediary for answer
      * @param updateCallback        Callback called when txId is found, and also called with subsequent confirmations
      */
-    waitForPayment(abortSignal?: AbortSignal, checkIntervalSeconds?: number, updateCallback?: (txId: string, confirmations: number, targetConfirmations: number) => void): Promise<void>;
+    abstract waitForPayment(abortSignal?: AbortSignal, checkIntervalSeconds?: number, updateCallback?: (txId: string, confirmations: number, targetConfirmations: number) => void): Promise<void>;
 
     /**
      * Returns if the swap can be committed
      */
-    canCommit(): boolean;
+    abstract canCommit(): boolean;
 
     /**
      * Commits the swap on-chain, locking the tokens from the intermediary in an HTLC
      * Important: Make sure this transaction is confirmed and only after it is call claim()
      *
-     * @param signer                    Signer to use to send the commit transaction
      * @param noWaitForConfirmation     Do not wait for transaction confirmation (careful! be sure that transaction confirms before calling claim())
      * @param abortSignal               Abort signal
      */
-    commit(signer: AnchorProvider, noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<TransactionSignature>;
+    abstract commit(noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<string>;
 
     /**
      * Returns a promise that resolves when swap is committed
      *
      * @param abortSignal   AbortSignal
      */
-    waitTillCommited(abortSignal?: AbortSignal): Promise<void>;
+    abstract waitTillCommited(abortSignal?: AbortSignal): Promise<void>;
 
     /**
      * Returns if the swap can be claimed
      */
-    canClaim(): boolean;
+    abstract canClaim(): boolean;
 
     /**
      * Claims and finishes the swap once it was successfully committed on-chain with commit()
      *
-     * @param signer                    Signer to use to send the claim transaction
      * @param noWaitForConfirmation     Do not wait for transaction confirmation (careful! be sure that transaction confirms before calling claim())
      * @param abortSignal               Abort signal
      */
-    claim(signer: AnchorProvider, noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<TransactionSignature>;
+    abstract claim(noWaitForConfirmation?: boolean, abortSignal?: AbortSignal): Promise<string>;
 
     /**
      * Returns a promise that resolves when swap is claimed
      *
      * @param abortSignal   AbortSignal
      */
-    waitTillClaimed(abortSignal?: AbortSignal): Promise<void>;
+    abstract waitTillClaimed(abortSignal?: AbortSignal): Promise<void>;
 
     // /**
     //  * Signs both, commit and claim transaction at once using signAllTransactions methods, wait for commit to confirm TX and then sends claim TX
@@ -94,24 +144,44 @@ interface IBTCxtoSolSwap extends ISwap {
      * @fires BTCtoSolWrapper#swapState
      * @fires BTCtoSolSwap#swapState
      */
-    emitEvent(): void;
+    abstract emitEvent(): void;
 
     /**
      * Get payment hash
      */
-    getPaymentHash(): Buffer;
+    abstract getPaymentHash(): Buffer;
 
     /**
      * Returns a string that can be displayed as QR code representation of the address (with bitcoin: or lightning: prefix)
      */
-    getQrData(): string;
+    abstract getQrData(): string;
 
     /**
      * Returns a bitcoin address/lightning network invoice of the swap.
      */
-    getAddress(): string;
+    abstract getAddress(): string;
 
-    getWrapper(): IBTCxtoSolWrapper;
+    getWrapper(): IBTCxtoSolWrapper<T> {
+        return this.wrapper;
+    }
+
+    abstract getType(): SwapType;
+
+    save(): Promise<void> {
+        return this.wrapper.storage.saveSwapData(this);
+    }
+
+    serialize(): any{
+        return {
+            url: this.url,
+
+            data: this.data!=null ? this.data.serialize() : null,
+            prefix: this.prefix,
+            timeout: this.timeout,
+            signature: this.signature,
+            nonce: this.nonce
+        };
+    }
 
 }
 

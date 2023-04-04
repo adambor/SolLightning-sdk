@@ -1,14 +1,14 @@
 import SwapData from "../../../swaps/SwapData";
 import {PublicKey} from "@solana/web3.js";
 import * as BN from "bn.js";
-import SwapType from "../../../swaps/SwapType";
 import {TokenAddress} from "../../../swaps/TokenAddress";
+import ChainSwapType from "../../../swaps/ChainSwapType";
 
 class SolanaSwapData extends SwapData {
 
     readonly initializer?: PublicKey;
-    readonly offerer: PublicKey;
-    readonly intermediary: PublicKey;
+    offerer: PublicKey;
+    intermediary: PublicKey;
     readonly token: PublicKey;
     readonly amount: BN;
     readonly paymentHash: string;
@@ -119,14 +119,14 @@ class SolanaSwapData extends SwapData {
         return this.token.equals(token);
     }
 
-    getType(): SwapType {
+    getType(): ChainSwapType {
         switch(this.kind) {
             case 0:
-                return SwapType.HTLC;
+                return ChainSwapType.HTLC;
             case 1:
-                return SwapType.CHAIN;
+                return ChainSwapType.CHAIN;
             case 2:
-                return SwapType.CHAIN_NONCED;
+                return ChainSwapType.CHAIN_NONCED;
         }
         return null;
     }
@@ -155,6 +155,24 @@ class SolanaSwapData extends SwapData {
         return this.paymentHash;
     }
 
+    getClaimer(): string {
+        return this.intermediary==null ? null : this.intermediary.toBase58();
+    }
+
+    getOfferer(): string {
+        return this.offerer==null ? null: this.offerer.toBase58();
+    }
+
+    setClaimer(newClaimer: string) {
+        this.intermediary = new PublicKey(newClaimer);
+    }
+
+    setOfferer(newOfferer: string) {
+        this.offerer = new PublicKey(newOfferer);
+    }
+
 }
+
+SwapData.deserializationList["sol"] = SolanaSwapData;
 
 export default SolanaSwapData;

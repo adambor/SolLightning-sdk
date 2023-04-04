@@ -1,8 +1,8 @@
 import * as bolt11 from "bolt11";
 import SoltoBTCLNWrapper from "./SoltoBTCLNWrapper";
-import ISolToBTCxSwap from "../tobtc/ISolToBTCxSwap";
-import SwapType from "../SwapType";
-import SwapData from "../swaps/SwapData";
+import ISolToBTCxSwap from "../ISolToBTCxSwap";
+import SwapType from "../../SwapType";
+import SwapData from "../../swaps/SwapData";
 import * as BN from "bn.js";
 
 export default class SoltoBTCLNSwap<T extends SwapData> extends ISolToBTCxSwap<T> {

@@ -1,7 +1,7 @@
 import SoltoBTCWrapper from "./SoltoBTCWrapper";
-import ISolToBTCxSwap, {SolToBTCxSwapState} from "../tobtc/ISolToBTCxSwap";
-import SwapType from "../SwapType";
-import SwapData from "../swaps/SwapData";
+import ISolToBTCxSwap, {SolToBTCxSwapState} from "../ISolToBTCxSwap";
+import SwapType from "../../SwapType";
+import SwapData from "../../swaps/SwapData";
 import * as BN from "bn.js";
 
 export default class SoltoBTCSwap<T extends SwapData> extends ISolToBTCxSwap<T> {
@@ -97,6 +97,35 @@ export default class SoltoBTCSwap<T extends SwapData> extends ISolToBTCxSwap<T> 
         partialySerialized.txId = this.txId;
 
         return partialySerialized;
+    }
+
+    /**
+     * A blocking promise resolving when swap was concluded by the intermediary
+     * rejecting in case of failure
+     *
+     * @param abortSignal           Abort signal
+     * @param checkIntervalSeconds  How often to poll the intermediary for answer
+     *
+     * @returns {Promise<boolean>}  Was the payment successful? If not we can refund.
+     */
+    async waitForPayment(abortSignal?: AbortSignal, checkIntervalSeconds?: number): Promise<boolean> {
+        const result = await this.wrapper.contract.waitForRefundAuthorization(this.data, this.url, abortSignal, checkIntervalSeconds);
+
+        if(abortSignal.aborted) throw new Error("Aborted");
+
+        if(!result.is_paid) {
+            this.state = SolToBTCxSwapState.REFUNDABLE;
+
+            await this.save();
+
+            this.emitEvent();
+            return false;
+        } else {
+            this.txId = result.txId;
+            await this.save();
+
+            return true;
+        }
     }
 
     getTxId(): string {

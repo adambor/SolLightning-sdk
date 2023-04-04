@@ -1,10 +1,10 @@
 
 import ISolToBTCxWrapper from "./ISolToBTCxWrapper";
-import ISwap from "./ISwap";
+import ISwap from "../ISwap";
 import * as BN from "bn.js";
-import SwapData from "./swaps/SwapData";
+import SwapData from "../swaps/SwapData";
 import * as EventEmitter from "events";
-import SwapType from "./SwapType";
+import SwapType from "../SwapType";
 
 abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
 
@@ -116,8 +116,10 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
             throw new Error("Must be in CREATED state!");
         }
 
+        console.log(this);
+
         try {
-            await this.wrapper.contract.isValidInitAuthorization(this.data, this.prefix, this.timeout, this.signature, this.nonce);
+            await this.wrapper.contract.isValidInitPayInAuthorization(this.data, this.timeout, this.prefix, this.signature, this.nonce);
         } catch (e) {
             console.error(e);
             throw new Error("Expired, please retry");
@@ -212,13 +214,13 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
 
         let txResult: string;
         if(this.wrapper.contract.isExpired(this.data)) {
-            txResult = await this.wrapper.contract.refund(this.data, !noWaitForConfirmation, abortSignal);
+            txResult = await this.wrapper.contract.refund(this.data);
         } else {
             const res = await this.wrapper.contract.getRefundAuthorization(this.data, this.url);
             if(res.is_paid) {
                 throw new Error("Payment was successful");
             }
-            txResult = await this.wrapper.contract.refundWithAuthorization(this.data, res.timeout, res.prefix, res.signature, !noWaitForConfirmation, abortSignal);
+            txResult = await this.wrapper.contract.refundWithAuthorization(this.data, res.timeout, res.prefix, res.signature);
         }
 
         if(!noWaitForConfirmation) {

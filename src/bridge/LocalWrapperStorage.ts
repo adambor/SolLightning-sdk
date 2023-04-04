@@ -1,4 +1,4 @@
-import BTCLNtoSolSwap from "./btclntosol/BTCLNtoSolSwap";
+import BTCLNtoSolSwap from "./frombtc/btclntosol/BTCLNtoSolSwap";
 import IWrapperStorage from "./IWrapperStorage";
 import ISwap from "./ISwap";
 

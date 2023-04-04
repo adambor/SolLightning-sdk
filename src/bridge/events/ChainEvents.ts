@@ -5,7 +5,7 @@ export type EventListener<T extends SwapData> = (obj: SwapEvent<T>[]) => Promise
 
 interface ChainEvents<T extends SwapData> {
 
-    init(): Promise<void>;
+    stop(): Promise<void>;
     registerListener(cbk: EventListener<T>): void;
     unregisterListener(cbk: EventListener<T>): boolean;
 

@@ -1,6 +1,6 @@
 import {BorshCoder} from "@project-serum/anchor";
 import {Message, PublicKey} from "@solana/web3.js";
-import {programIdl} from "./bridge/contracts/programIdl";
+import {programIdl} from "./bridge/chains/solana/swaps/programIdl";
 
 const coder = new BorshCoder(programIdl);
 

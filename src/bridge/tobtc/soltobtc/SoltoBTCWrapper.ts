@@ -1,9 +1,9 @@
 import SoltoBTCSwap from "./SoltoBTCSwap";
-import ISolToBTCxWrapper from "../tobtc/ISolToBTCxWrapper";
-import IWrapperStorage from "../IWrapperStorage";
-import SwapData from "../swaps/SwapData";
-import ClientSwapContract from "../swaps/ClientSwapContract";
-import ChainEvents from "../events/ChainEvents";
+import ISolToBTCxWrapper from "../ISolToBTCxWrapper";
+import IWrapperStorage from "../../IWrapperStorage";
+import SwapData from "../../swaps/SwapData";
+import ClientSwapContract from "../../swaps/ClientSwapContract";
+import ChainEvents from "../../events/ChainEvents";
 import * as BN from "bn.js";
 
 class SoltoBTCWrapper<T extends SwapData> extends ISolToBTCxWrapper<T> {

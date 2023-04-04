@@ -1,4 +1,4 @@
-import ClientSwapContract from "../../../swaps/ClientSwapContract";
+import ClientSwapContract, {IntermediaryReputationType} from "../../../swaps/ClientSwapContract";
 import SolanaSwapData from "./SolanaSwapData";
 import {
     Ed25519Program,
@@ -307,7 +307,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
 
     isValidDataSignature(data: Buffer, signature: string, publicKey: string): Promise<boolean> {
         const hash = createHash("sha256").update(data).digest();
-        return Promise.resolve(sign.detached.verify(hash, Buffer.from(signature, "hex"), Buffer.from(publicKey, "hex")));
+        return Promise.resolve(sign.detached.verify(hash, Buffer.from(signature, "hex"), new PublicKey(publicKey).toBuffer()));
     }
 
     async isValidInitPayInAuthorization(data: SolanaSwapData, timeout: string, prefix: string, signature: string, nonce: number): Promise<Buffer> {
@@ -1093,6 +1093,33 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
             null,
             null
         );
+    }
+
+    async getIntermediaryReputation(address: string, token?: TokenAddress): Promise<IntermediaryReputationType> {
+
+        const data: any = await this.program.account.userAccount.fetch(this.getUserVaultKey(new PublicKey(address), token || this.WBTC_ADDRESS));
+
+        const response: any = {};
+
+        for(let i=0;i<3;i++) {
+            response[i] = {
+                successVolume: data.successVolume[i],
+                successCount: data.successCount[i],
+                failVolume: data.failVolume[i],
+                failCount: data.failCount[i],
+                coopCloseVolume: data.coopCloseVolume[i],
+                coopCloseCount: data.coopCloseCount[i]
+            };
+        }
+
+        return response;
+
+    }
+
+    async getIntermediaryBalance(address: string, token?: TokenAddress): Promise<BN> {
+        const data: any = await this.program.account.userAccount.fetch(this.getUserVaultKey(new PublicKey(address), token || this.WBTC_ADDRESS));
+
+        return data.amount;
     }
 
 

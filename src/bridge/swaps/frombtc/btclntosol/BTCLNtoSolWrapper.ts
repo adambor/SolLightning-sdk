@@ -31,8 +31,9 @@ class BTCLNtoSolWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {
      * @param amount            Amount you wish to receive in base units (satoshis)
      * @param expirySeconds     Swap expiration in seconds, setting this too low might lead to unsuccessful payments, too high and you might lose access to your funds for longer than necessary
      * @param url               Intermediary/Counterparty swap service url
+     * @param requiredKey       Required key of the Intermediary
      */
-    async create(amount: BN, expirySeconds: number, url: string): Promise<BTCLNtoSolSwap<T>> {
+    async create(amount: BN, expirySeconds: number, url: string, requiredKey?: string): Promise<BTCLNtoSolSwap<T>> {
 
         if(!this.isInitialized) throw new Error("Not initialized, call init() first!");
 
@@ -40,9 +41,18 @@ class BTCLNtoSolWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {
 
         const parsed = bolt11.decode(result.pr);
 
-        const swapData: T = this.contract.createSwapData(ChainSwapType.HTLC, null, this.contract.getAddress(), null, null, parsed.tagsObject.payment_hash, null, null, null, null);
+        const swapData: T = this.contract.createSwapData(ChainSwapType.HTLC, requiredKey, this.contract.getAddress(), null, null, parsed.tagsObject.payment_hash, null, null, null, null);
 
-        const swap = new BTCLNtoSolSwap<T>(this, result.pr, result.secret, url, swapData, amount.sub(result.swapFee));
+        const total = amount.sub(result.swapFee);
+
+        if(requiredKey!=null) {
+            const liquidity = await this.contract.getIntermediaryBalance(requiredKey);
+            if(liquidity.lt(total)) {
+                throw new Error("Intermediary doesn't have enough liquidity");
+            }
+        }
+
+        const swap = new BTCLNtoSolSwap<T>(this, result.pr, result.secret, url, swapData, total);
 
         await swap.save();
         this.swapData[swap.getPaymentHash().toString("hex")] = swap;

@@ -19,6 +19,7 @@ import BTCtoSolNewSwap from "./swaps/frombtc/btctosolNew/BTCtoSolNewSwap";
 import SolanaSwapData from "./chains/solana/swaps/SolanaSwapData";
 import SolanaClientSwapContract from "./chains/solana/swaps/SolanaClientSwapContract";
 import SolanaChainEvents from "./chains/solana/events/SolanaChainEvents";
+import IntermediaryDiscovery from "./intermediaries/IntermediaryDiscovery";
 
 export default class SolanaSwapper {
 
@@ -28,6 +29,7 @@ export default class SolanaSwapper {
     btctosol: BTCtoSolNewWrapper<SolanaSwapData>;
 
     private readonly intermediaryUrl: string;
+    private readonly intermediaryDiscovery: IntermediaryDiscovery<SolanaSwapData>;
 
     /**
      * Returns true if string is a valid bitcoin address
@@ -56,7 +58,7 @@ export default class SolanaSwapper {
         return false;
     }
 
-    constructor(provider: AnchorProvider, intermediaryUrl: string, wbtcToken?: PublicKey) {
+    constructor(provider: AnchorProvider, intermediaryUrl?: string, wbtcToken?: PublicKey) {
         const swapContract = new SolanaClientSwapContract(provider, wbtcToken || Bitcoin.wbtcToken);
         const chainEvents = new SolanaChainEvents(provider, swapContract);
 
@@ -65,7 +67,11 @@ export default class SolanaSwapper {
         this.btclntosol = new BTCLNtoSolWrapper(new LocalWrapperStorage("solSwaps-BTCLNtoSol"), swapContract, chainEvents);
         this.btctosol = new BTCtoSolNewWrapper(new LocalWrapperStorage("solSwaps-BTCtoSol"), swapContract, chainEvents);
 
-        this.intermediaryUrl = intermediaryUrl;
+        if(intermediaryUrl!=null) {
+            this.intermediaryUrl = intermediaryUrl;
+        } else {
+            this.intermediaryDiscovery = new IntermediaryDiscovery<SolanaSwapData>(swapContract);
+        }
     }
 
     /**
@@ -73,7 +79,11 @@ export default class SolanaSwapper {
      *
      * @param kind      Type of the swap
      */
-    static getMaximum(kind: SwapType): BN {
+    getMaximum(kind: SwapType): BN {
+        if(this.intermediaryDiscovery!=null) {
+            const max = this.intermediaryDiscovery.getSwapMaximum(kind);
+            if(max!=null) return new BN(max);
+        }
         switch(kind) {
             case SwapType.BTC_TO_SOL:
                 return ConstantBTCtoSol.max;
@@ -92,7 +102,11 @@ export default class SolanaSwapper {
      *
      * @param kind      Type of swap
      */
-    static getMinimum(kind: SwapType): BN {
+    getMinimum(kind: SwapType): BN {
+        if(this.intermediaryDiscovery!=null) {
+            const min = this.intermediaryDiscovery.getSwapMinimum(kind);
+            if(min!=null) return new BN(min);
+        }
         switch(kind) {
             case SwapType.BTC_TO_SOL:
                 return ConstantBTCtoSol.min;
@@ -115,6 +129,10 @@ export default class SolanaSwapper {
         await this.soltobtc.init();
         await this.btclntosol.init();
         await this.btctosol.init();
+
+        if(this.intermediaryDiscovery!=null) {
+            await this.intermediaryDiscovery.init();
+        }
     }
 
     /**
@@ -136,7 +154,12 @@ export default class SolanaSwapper {
      * @param confirmations         How many confirmations must the intermediary wait to claim the funds
      */
     createSolToBTCSwap(address: string, amount: BN, confirmationTarget?: number, confirmations?: number): Promise<SoltoBTCSwap<SolanaSwapData>> {
-        return this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, this.intermediaryUrl+"/tobtc");
+        if(this.intermediaryUrl!=null) {
+            return this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, this.intermediaryUrl+"/tobtc");
+        }
+        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.SOL_TO_BTC, amount, 1);
+        if(candidates.length===0) throw new Error("No intermediary found!");
+        return this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, candidates[0].url+"/tobtc", candidates[0].address);
     }
 
     /**
@@ -146,7 +169,13 @@ export default class SolanaSwapper {
      * @param expirySeconds         For how long to lock your funds (higher expiry means higher probability of payment success)
      */
     createSolToBTCLNSwap(paymentRequest: string, expirySeconds?: number): Promise<SoltoBTCLNSwap<SolanaSwapData>> {
-        return this.soltobtcln.create(paymentRequest, expirySeconds || (3*24*3600), this.intermediaryUrl+"/tobtcln");
+        if(this.intermediaryUrl!=null) {
+            return this.soltobtcln.create(paymentRequest, expirySeconds || (3 * 24 * 3600), this.intermediaryUrl + "/tobtcln");
+        }
+        const parsedPR = bolt11.decode(paymentRequest);
+        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.SOL_TO_BTCLN, new BN(parsedPR.millisatoshis).div(new BN(1000)), 1);
+        if(candidates.length===0) throw new Error("No intermediary found!");
+        return this.soltobtcln.create(paymentRequest, expirySeconds || (3*24*3600), candidates[0].url+"/tobtcln", candidates[0].address);
     }
 
     /**
@@ -155,7 +184,12 @@ export default class SolanaSwapper {
      * @param amount        Amount to receive, in satoshis (bitcoin's smallest denomination)
      */
     createBTCtoSolSwap(amount: BN): Promise<BTCtoSolNewSwap<SolanaSwapData>> {
-        return this.btctosol.create(amount, this.intermediaryUrl+"/frombtc");
+        if(this.intermediaryUrl!=null) {
+            return this.btctosol.create(amount, this.intermediaryUrl+"/frombtc");
+        }
+        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.BTC_TO_SOL, amount, 1);
+        if(candidates.length===0) throw new Error("No intermediary found!");
+        return this.btctosol.create(amount, candidates[0].url+"/frombtc", candidates[0].address);
     }
 
     /**
@@ -165,7 +199,12 @@ export default class SolanaSwapper {
      * @param invoiceExpiry     Lightning invoice expiry time (in seconds)
      */
     createBTCLNtoSolSwap(amount: BN, invoiceExpiry?: number): Promise<BTCLNtoSolSwap<SolanaSwapData>> {
-        return this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), this.intermediaryUrl+"/frombtcln");
+        if(this.intermediaryUrl!=null) {
+            return this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), this.intermediaryUrl+"/frombtcln");
+        }
+        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.BTCLN_TO_SOL, amount, 1);
+        if(candidates.length===0) throw new Error("No intermediary found!");
+        return this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), candidates[0].url+"/frombtcln", candidates[0].address);
     }
 
     /**

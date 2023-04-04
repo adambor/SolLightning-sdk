@@ -28,12 +28,13 @@ class BTCtoSolNewWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {
      *
      * @param amount            Amount you wish to receive in base units (satoshis)
      * @param url               Intermediary/Counterparty swap service url
+     * @param requiredKey       Required key of the Intermediary
      */
-    async create(amount: BN, url: string): Promise<BTCtoSolNewSwap<T>> {
+    async create(amount: BN, url: string, requiredKey?: string): Promise<BTCtoSolNewSwap<T>> {
 
         if(!this.isInitialized) throw new Error("Not initialized, call init() first!");
 
-        const result = await this.contract.receiveOnchain(amount, url);
+        const result = await this.contract.receiveOnchain(amount, url, requiredKey);
 
         const swap = new BTCtoSolNewSwap(this, result.address, amount, url, result.data, result.prefix, result.timeout, result.signature, result.nonce);
 

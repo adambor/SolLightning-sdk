@@ -39,6 +39,17 @@ const timeoutPromise = (timeoutSeconds) => {
     });
 };
 
+export type IntermediaryReputationType = {
+    [key in ChainSwapType]: {
+        successVolume: BN,
+        successCount: BN,
+        failVolume: BN,
+        failCount: BN,
+        coopCloseVolume: BN,
+        coopCloseCount: BN,
+    }
+};
+
 abstract class ClientSwapContract<T extends SwapData> {
 
     WBTC_ADDRESS: TokenAddress;
@@ -445,6 +456,12 @@ abstract class ClientSwapContract<T extends SwapData> {
             throw new Error("Invalid data returned - token");
         }
 
+        //Get intermediary's liquidity
+        const liquidity = await this.getIntermediaryBalance(data.getOfferer(), data.getToken());
+        if(liquidity.lt(data.getAmount())) {
+            throw new Error("Intermediary doesn't have enough liquidity to honor the swap");
+        }
+
         //Check that we have enough time to send the TX and for it to confirm
         const expiry = ClientSwapContract.getOnchainSendTimeout(data);
         const currentTimestamp = new BN(Math.floor(Date.now()/1000));
@@ -691,6 +708,9 @@ abstract class ClientSwapContract<T extends SwapData> {
 
     abstract getAddress(): string;
     abstract isValidAddress(address: string): boolean;
+
+    abstract getIntermediaryReputation(address: string, token?: TokenAddress): Promise<IntermediaryReputationType>;
+    abstract getIntermediaryBalance(address: string, token?: TokenAddress): Promise<BN>;
 
 }
 

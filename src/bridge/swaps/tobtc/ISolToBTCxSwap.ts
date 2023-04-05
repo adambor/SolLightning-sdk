@@ -125,7 +125,7 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
             throw new Error("Expired, please retry");
         }
 
-        const txResult = await this.wrapper.contract.initPayIn(this.data, this.timeout, this.prefix, this.signature, this.nonce, !noWaitForConfirmation, abortSignal);
+        const txResult = await this.wrapper.contract.initPayIn(this.data, this.timeout, this.prefix, this.signature, this.nonce);
 
         if(!noWaitForConfirmation) {
             this.state = SolToBTCxSwapState.COMMITED;

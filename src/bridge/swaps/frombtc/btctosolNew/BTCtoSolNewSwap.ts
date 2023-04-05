@@ -177,7 +177,7 @@ export default class BTCtoSolNewSwap<T extends SwapData> extends IBTCxtoSolSwap<
             throw new Error("Request timed out!")
         }
 
-        const txResult = await this.wrapper.contract.init(this.data, this.timeout, this.prefix, this.signature, this.nonce, this.getTxoHash(), !noWaitForConfirmation, abortSignal);
+        const txResult = await this.wrapper.contract.init(this.data, this.timeout, this.prefix, this.signature, this.nonce, this.getTxoHash());
 
         //Maybe don't wait for TX but instead subscribe to logs, this would improve the experience when user speeds up the transaction by replacing it.
 
@@ -240,7 +240,7 @@ export default class BTCtoSolNewSwap<T extends SwapData> extends IBTCxtoSolSwap<
             throw new Error("Must be in BTC_TX_CONFIRMED state!");
         }
 
-        const txResult = await this.wrapper.contract.claimWithTxData(this.data, this.txId, this.vout, this.secret, !noWaitForConfirmation, abortSignal);
+        const txResult = await this.wrapper.contract.claimWithTxData(this.data, this.txId, this.vout, this.secret);
 
         if(!noWaitForConfirmation) {
             await this.waitTillClaimed(abortSignal);

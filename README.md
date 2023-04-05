@@ -38,7 +38,7 @@ For now this SDK needs to configured as to which intermediary node to use. In th
     //Create anchor provider
     const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
     //Create the swapper instance
-    const swapper = new Swapper(anchorProvider, _urlOfIntermediary, null, _wbtcTokenPubkey); //URL of the running intermediary node instance, and token mint pubkey (address) of the WBTC token minted on devnet (see intermediary node's instructions)
+    const swapper = new Swapper(anchorProvider, _urlOfIntermediary, _wbtcTokenPubkey); //URL of the running intermediary node instance, and token mint pubkey (address) of the WBTC token minted on devnet (see intermediary node's instructions)
     //Initialize the swapper
     await swapper.init();
     ```
@@ -51,12 +51,12 @@ const swap = await swapper.createSolToBTCSwap(_address, _amount);
 const amountToBePaid = swap.getInAmount();
 const fee = swap.getFee();
 //Pay for the swap
-await swap.commit(anchorProvider);
+await swap.commit();
 //Wait for the swap to conclude
 const result = await swap.waitForPayment();
 if(!result) {
     //Swap failed, money can be refunded
-    await swap.refund(anchorProvider);
+    await swap.refund();
 } else {
     //Swap successful
 }
@@ -70,12 +70,12 @@ const swap = await swapper.createSolToBTCLNSwap(_lightningInvoice);
 const amountToBePaid = swap.getInAmount();
 const fee = swap.getFee();
 //Pay for the swap
-await swap.commit(anchorProvider);
+await swap.commit();
 //Wait for the swap to conclude
 const result = await swap.waitForPayment();
 if(!result) {
     //Swap failed, money can be refunded
-    await swap.refund(anchorProvider);
+    await swap.refund();
 } else {
     //Swap successful
 }
@@ -90,7 +90,7 @@ const amountToBeReceivedOnSolana = swap.getOutAmount(); //Get the amount we will
 const fee = swap.getFee();
 
 //Once client is happy with the fee
-await swap.commit(anchorProvider);
+await swap.commit();
 
 //Get the bitcoin address and amount required to be sent to that bitcoin address
 const receivingAddressOnBitcoin = swap.getAddress();
@@ -105,7 +105,7 @@ try {
         //Updates about the swap state, txId, current confirmations of the transaction, required target confirmations, amount of the transaction received, updated totalFee (as on-chain fees may change), and resulting amount of token received.
     });
     //Claim the swap funds
-    await swap.claim(anchorProvider);
+    await swap.claim();
 } catch(e) {
     //Error occurred while waiting for payment
 }
@@ -126,7 +126,7 @@ try {
     //Wait for the payment to arrive
     await swap.waitForPayment();
     //Claim the swap funds
-    await swap.commitAndClaim(anchorProvider);
+    await swap.commitAndClaim();
 } catch(e) {
     //Error occurred while waiting for payment
 }
@@ -143,7 +143,7 @@ This call can be checked on every startup and periodically every few minutes.
 const refundableSwaps = await swapper.getRefundableSwaps();
 //Refund all the swaps
 for(let swap of refundableSwaps) {
-    await swap.refund(anchorProvider);
+    await swap.refund();
 }
 ```
 
@@ -155,6 +155,6 @@ Returns swaps that are ready to be claimed by the client, this can happen if cli
 const claimableSwaps = await swapper.getClaimableSwaps();
 //Claim all the claimable swaps
 for(let swap of claimableSwaps) {
-    await swap.commitAndClaim(anchorProvider);
+    await swap.commitAndClaim();
 }
 ```

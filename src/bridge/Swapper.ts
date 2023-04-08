@@ -21,10 +21,12 @@ import SolanaClientSwapContract from "./chains/solana/swaps/SolanaClientSwapCont
 import SolanaChainEvents from "./chains/solana/events/SolanaChainEvents";
 import IntermediaryDiscovery from "./intermediaries/IntermediaryDiscovery";
 import IntermediaryError from "./errors/IntermediaryError";
+import ISwapPrice from "./swaps/ISwapPrice";
 
 type SwapperOptions = {
     intermediaryUrl?: string,
-    wbtcToken?: PublicKey
+    wbtcToken?: PublicKey,
+    pricing?: ISwapPrice
 };
 
 export default class SolanaSwapper {

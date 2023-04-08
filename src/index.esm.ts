@@ -15,6 +15,8 @@ import SoltoBTCLNSwap from "./bridge/swaps/tobtc/soltobtcln/SoltoBTCLNSwap";
 import SoltoBTCSwap from "./bridge/swaps/tobtc/soltobtc/SoltoBTCSwap";
 import SwapData from "./bridge/swaps/SwapData";
 import SolanaSwapData from "./bridge/chains/solana/swaps/SolanaSwapData";
+import ISwapPrice from "./bridge/swaps/ISwapPrice";
+import CoinGeckoSwapPrice from "./bridge/prices/CoinGeckoSwapPrice";
 
 export {
     Swapper,
@@ -35,5 +37,8 @@ export {
     SoltoBTCSwap,
 
     SwapData,
-    SolanaSwapData
+    SolanaSwapData,
+
+    ISwapPrice,
+    CoinGeckoSwapPrice
 };

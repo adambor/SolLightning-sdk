@@ -20,3 +20,5 @@ interface ISwapPrice {
     getFromBtcSwapAmount(fromAmount:BN, toToken: TokenAddress): Promise<BN>;
 
 }
+
+export default ISwapPrice;

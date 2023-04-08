@@ -33,8 +33,10 @@ class BTCLNtoSolWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {
      * @param expirySeconds     Swap expiration in seconds, setting this too low might lead to unsuccessful payments, too high and you might lose access to your funds for longer than necessary
      * @param url               Intermediary/Counterparty swap service url
      * @param requiredKey       Required key of the Intermediary
+     * @param requiredBaseFee   Desired base fee reported by the swap intermediary
+     * @param requiredFeePPM    Desired proportional fee report by the swap intermediary
      */
-    async create(amount: BN, expirySeconds: number, url: string, requiredKey?: string): Promise<BTCLNtoSolSwap<T>> {
+    async create(amount: BN, expirySeconds: number, url: string, requiredKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<BTCLNtoSolSwap<T>> {
 
         if(!this.isInitialized) throw new Error("Not initialized, call init() first!");
 

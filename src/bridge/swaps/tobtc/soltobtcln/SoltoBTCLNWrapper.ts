@@ -35,8 +35,10 @@ class SoltoBTCLNWrapper<T extends SwapData> extends ISolToBTCxWrapper<T> {
      * @param expirySeconds     Swap expiration in seconds, setting this too low might lead to unsuccessful payments, too high and you might lose access to your funds for longer than necessary
      * @param url               Intermediary/Counterparty swap service url
      * @param requiredKey       Required key of the Intermediary
+     * @param requiredBaseFee   Desired base fee reported by the swap intermediary
+     * @param requiredFeePPM    Desired proportional fee report by the swap intermediary
      */
-    async create(bolt11PayRequest: string, expirySeconds: number, url: string, requiredKey?: string): Promise<SoltoBTCLNSwap<T>> {
+    async create(bolt11PayRequest: string, expirySeconds: number, url: string, requiredKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<SoltoBTCLNSwap<T>> {
 
         if(!this.isInitialized) throw new Error("Not initialized, call init() first!");
 
@@ -50,7 +52,7 @@ class SoltoBTCLNWrapper<T extends SwapData> extends ISolToBTCxWrapper<T> {
 
         const fee = SoltoBTCLNWrapper.calculateFeeForAmount(sats);
 
-        const result = await this.contract.payLightning(bolt11PayRequest, expirySeconds, fee, url, requiredKey);
+        const result = await this.contract.payLightning(bolt11PayRequest, expirySeconds, fee, url, requiredKey, requiredBaseFee, requiredFeePPM);
 
         const swap = new SoltoBTCLNSwap(
             this,

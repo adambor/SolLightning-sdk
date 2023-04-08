@@ -12,6 +12,7 @@ import ChainUtils, {BitcoinTransaction} from "../../ChainUtils";
 import UserError from "../errors/UserError";
 import IntermediaryError from "../errors/IntermediaryError";
 import SignatureVerificationError from "../errors/SignatureVerificationError";
+import ISwapPrice from "./ISwapPrice";
 
 export class PaymentAuthError extends Error {
 
@@ -56,9 +57,11 @@ export type IntermediaryReputationType = {
 abstract class ClientSwapContract<T extends SwapData> {
 
     WBTC_ADDRESS: TokenAddress;
+    swapPrice: ISwapPrice;
 
-    protected constructor(wbtcAddress?: TokenAddress) {
+    protected constructor(wbtcAddress?: TokenAddress, swapPrice?: ISwapPrice) {
         this.WBTC_ADDRESS = wbtcAddress;
+        this.swapPrice = swapPrice;
     }
 
     static getOnchainSendTimeout(data: SwapData) {
@@ -77,7 +80,9 @@ abstract class ClientSwapContract<T extends SwapData> {
         ])).digest();
     }
 
-    async payOnchain(address: string, amount: BN, confirmationTarget: number, confirmations: number, url: string, requiredClaimerKey?: string): Promise<{
+
+
+    async payOnchain(address: string, amount: BN, confirmationTarget: number, confirmations: number, url: string, requiredClaimerKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
         networkFee: BN,
         swapFee: BN,
         totalFee: BN,
@@ -158,7 +163,11 @@ abstract class ClientSwapContract<T extends SwapData> {
                 throw new IntermediaryError("Invalid data returned - token");
             }
         } else {
-            //TODO: Maybe check pricing from some exchange and determine the fees
+            if(this.swapPrice!=null && requiredBaseFee!=null && requiredFeePPM!=null) {
+                if(!(await this.swapPrice.isValidAmountSend(amount, requiredBaseFee, requiredFeePPM, total.sub(networkFee), data.getToken()))) {
+                    throw new IntermediaryError("Fee too high");
+                }
+            }
         }
 
         if(
@@ -196,7 +205,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         };
     }
 
-    async payLightning(bolt11PayReq: string, expirySeconds: number, maxFee: BN, url: string, requiredClaimerKey?: string): Promise<{
+    async payLightning(bolt11PayReq: string, expirySeconds: number, maxFee: BN, url: string, requiredClaimerKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
         confidence: string,
         swapFee: BN,
         data: T,
@@ -261,7 +270,11 @@ abstract class ClientSwapContract<T extends SwapData> {
                 throw new IntermediaryError("Invalid data returned - token");
             }
         } else {
-            //TODO: Maybe check the pricing from some exchange
+            if(this.swapPrice!=null && requiredBaseFee!=null && requiredFeePPM!=null) {
+                if(!(await this.swapPrice.isValidAmountSend(sats, requiredBaseFee.add(maxFee), requiredFeePPM, total, data.getToken()))) {
+                    throw new IntermediaryError("Fee too high");
+                }
+            }
         }
 
         if(!data.getAmount().eq(total)) {
@@ -435,7 +448,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         throw new Error("Aborted");
     }
 
-    async receiveOnchain(amount: BN, url: string, requiredOffererKey?: string): Promise<{
+    async receiveOnchain(amount: BN, url: string, requiredOffererKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
         address: string,
         swapFee: BN,
         data: T,
@@ -487,7 +500,11 @@ abstract class ClientSwapContract<T extends SwapData> {
                 throw new IntermediaryError("Invalid data returned - token");
             }
         } else {
-            //TODO: Check the pricing from some exchange
+            if(this.swapPrice!=null && requiredBaseFee!=null && requiredFeePPM!=null) {
+                if(!(await this.swapPrice.isValidAmountReceive(amount, requiredBaseFee, requiredFeePPM, data.getAmount(), data.getToken()))) {
+                    throw new IntermediaryError("Fee too high");
+                }
+            }
         }
 
         //Get intermediary's liquidity

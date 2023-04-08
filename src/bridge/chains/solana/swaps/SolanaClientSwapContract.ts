@@ -31,6 +31,7 @@ import * as bitcoin from "bitcoinjs-lib";
 import {programIdl} from "./programIdl";
 import ChainSwapType from "../../../swaps/ChainSwapType";
 import SignatureVerificationError from "../../../errors/SignatureVerificationError";
+import ISwapPrice from "../../../swaps/ISwapPrice";
 
 const STATE_SEED = "state";
 const VAULT_SEED = "vault";
@@ -72,8 +73,8 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         )[0];
     }
 
-    constructor(provider: AnchorProvider, wbtcToken: PublicKey) {
-        super(wbtcToken);
+    constructor(provider: AnchorProvider, wbtcToken?: PublicKey, swapPrice?: ISwapPrice) {
+        super(wbtcToken, swapPrice);
         this.provider = provider;
         this.btcRelay = new SolanaBtcRelay(provider);
         this.btcRelaySynchronizer = new SolanaBtcRelaySynchronizer(this.provider, this.btcRelay);

@@ -24,14 +24,20 @@ const COINS_MAP: {
     }
 };
 
-class CoinGeckoSwapPrice implements ISwapPrice {
+class CoinGeckoSwapPrice extends ISwapPrice {
 
     url: string;
 
-    constructor(url?: string) {
+    constructor(maxAllowedFeeDiffPPM: BN, url?: string) {
+        super(maxAllowedFeeDiffPPM);
         this.url = url || "https://api.coingecko.com/api/v3";
     }
 
+    /**
+     * Returns coin price in mSat
+     *
+     * @param coinId
+     */
     async getPrice(coinId: string): Promise<BN> {
 
         const response: Response = await fetch(this.url+"/simple/price?ids="+coinId+"&vs_currencies=sats&precision=3", {
@@ -77,9 +83,9 @@ class CoinGeckoSwapPrice implements ISwapPrice {
         const price = await this.getPrice(coin.coinId);
 
         return fromAmount
-            .mul(new BN(1000))
+            .mul(new BN(coin.decimals))
+            .mul(new BN(1000)) //To msat
             .div(price)
-            .div(new BN(coin.decimals));
     }
 
     async getToBtcSwapAmount(fromAmount: BN, fromToken: TokenAddress): Promise<BN> {

@@ -27,12 +27,14 @@ class SoltoBTCWrapper<T extends SwapData> extends ISolToBTCxWrapper<T> {
      * @param confirmations         Confirmations required for intermediary to claim the funds from PTLC (this determines the safety of swap)
      * @param url                   Intermediary/Counterparty swap service url
      * @param requiredKey           Required key of the Intermediary
+     * @param requiredBaseFee       Desired base fee reported by the swap intermediary
+     * @param requiredFeePPM        Desired proportional fee report by the swap intermediary
      */
-    async create(address: string, amount: BN, confirmationTarget: number, confirmations: number, url: string, requiredKey?: string): Promise<SoltoBTCSwap<T>> {
+    async create(address: string, amount: BN, confirmationTarget: number, confirmations: number, url: string, requiredKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<SoltoBTCSwap<T>> {
 
         if(!this.isInitialized) throw new Error("Not initialized, call init() first!");
 
-        const result = await this.contract.payOnchain(address, amount, confirmationTarget, confirmations, url, requiredKey);
+        const result = await this.contract.payOnchain(address, amount, confirmationTarget, confirmations, url, requiredKey, requiredBaseFee, requiredFeePPM);
 
         const swap = new SoltoBTCSwap(
             this,

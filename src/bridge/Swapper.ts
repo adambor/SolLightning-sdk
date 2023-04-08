@@ -2,7 +2,7 @@ import SoltoBTCLNWrapper from "./swaps/tobtc/soltobtcln/SoltoBTCLNWrapper";
 import SoltoBTCWrapper from "./swaps/tobtc/soltobtc/SoltoBTCWrapper";
 import BTCLNtoSolWrapper from "./swaps/frombtc/btclntosol/BTCLNtoSolWrapper";
 import LocalWrapperStorage from "./storage/LocalWrapperStorage";
-import {AnchorProvider, BN} from "@project-serum/anchor";
+import {AnchorProvider, BN, Wallet} from "@project-serum/anchor";
 import ISwap from "./swaps/ISwap";
 import ISolToBTCxSwap from "./swaps/tobtc/ISolToBTCxSwap";
 import IBTCxtoSolSwap from "./swaps/frombtc/IBTCxtoSolSwap";
@@ -13,7 +13,7 @@ import * as bitcoin from "bitcoinjs-lib";
 import * as bolt11 from "bolt11";
 import SwapType from "./swaps/SwapType";
 import {Bitcoin, ConstantBTCLNtoSol, ConstantBTCtoSol, ConstantSoltoBTC, ConstantSoltoBTCLN} from "../Constants";
-import {PublicKey} from "@solana/web3.js";
+import {Connection, Keypair, PublicKey} from "@solana/web3.js";
 import BTCtoSolNewWrapper from "./swaps/frombtc/btctosolNew/BTCtoSolNewWrapper";
 import BTCtoSolNewSwap from "./swaps/frombtc/btctosolNew/BTCtoSolNewSwap";
 import SolanaSwapData from "./chains/solana/swaps/SolanaSwapData";
@@ -21,6 +21,11 @@ import SolanaClientSwapContract from "./chains/solana/swaps/SolanaClientSwapCont
 import SolanaChainEvents from "./chains/solana/events/SolanaChainEvents";
 import IntermediaryDiscovery from "./intermediaries/IntermediaryDiscovery";
 import IntermediaryError from "./errors/IntermediaryError";
+
+type SwapperOptions = {
+    intermediaryUrl?: string,
+    wbtcToken?: PublicKey
+};
 
 export default class SolanaSwapper {
 
@@ -59,8 +64,25 @@ export default class SolanaSwapper {
         return false;
     }
 
-    constructor(provider: AnchorProvider, intermediaryUrl?: string, wbtcToken?: PublicKey) {
-        const swapContract = new SolanaClientSwapContract(provider, wbtcToken || Bitcoin.wbtcToken);
+    constructor(provider: AnchorProvider, options?: SwapperOptions);
+    constructor(rpcUrl: string, keypair: Keypair, options?: SwapperOptions);
+
+    constructor(providerOrRpcUrl: AnchorProvider | string, optionsOrKeypair?:  SwapperOptions | Keypair, noneOrOptions?: null | SwapperOptions) {
+        let provider: AnchorProvider;
+        let options: SwapperOptions;
+        if(typeof(providerOrRpcUrl)==="string") {
+            options = noneOrOptions;
+            provider = new AnchorProvider(new Connection(providerOrRpcUrl), new Wallet(optionsOrKeypair as Keypair), {
+                commitment: "confirmed"
+            });
+        } else {
+            provider = providerOrRpcUrl;
+            options = optionsOrKeypair as SwapperOptions;
+        }
+
+        options = options || {};
+
+        const swapContract = new SolanaClientSwapContract(provider, options.wbtcToken || Bitcoin.wbtcToken);
         const chainEvents = new SolanaChainEvents(provider, swapContract);
 
         this.soltobtcln = new SoltoBTCLNWrapper(new LocalWrapperStorage("solSwaps-SoltoBTCLN"), swapContract, chainEvents);
@@ -68,8 +90,8 @@ export default class SolanaSwapper {
         this.btclntosol = new BTCLNtoSolWrapper(new LocalWrapperStorage("solSwaps-BTCLNtoSol"), swapContract, chainEvents);
         this.btctosol = new BTCtoSolNewWrapper(new LocalWrapperStorage("solSwaps-BTCtoSol"), swapContract, chainEvents);
 
-        if(intermediaryUrl!=null) {
-            this.intermediaryUrl = intermediaryUrl;
+        if(options.intermediaryUrl!=null) {
+            this.intermediaryUrl = options.intermediaryUrl;
         } else {
             this.intermediaryDiscovery = new IntermediaryDiscovery<SolanaSwapData>(swapContract);
         }

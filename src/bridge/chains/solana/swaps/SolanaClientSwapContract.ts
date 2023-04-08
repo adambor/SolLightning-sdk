@@ -804,7 +804,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
                 escrowState: this.getEscrowStateKey(paymentHash),
                 vault: this.getVaultKey(data.token),
                 vaultAuthority: this.vaultAuthorityKey,
-                mint: this.WBTC_ADDRESS,
+                mint: data.token,
                 systemProgram: SystemProgram.programId,
                 rent: SYSVAR_RENT_PUBKEY,
                 tokenProgram: TOKEN_PROGRAM_ID,

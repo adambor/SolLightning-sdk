@@ -57,7 +57,7 @@ abstract class ClientSwapContract<T extends SwapData> {
 
     WBTC_ADDRESS: TokenAddress;
 
-    protected constructor(wbtcAddress: TokenAddress) {
+    protected constructor(wbtcAddress?: TokenAddress) {
         this.WBTC_ADDRESS = wbtcAddress;
     }
 
@@ -147,15 +147,21 @@ abstract class ClientSwapContract<T extends SwapData> {
 
         const total = new BN(jsonBody.data.total);
 
-        if(!total.eq(amount.add(totalFee))){
-            throw new IntermediaryError("Invalid total returned");
-        }
-
         const data: T = SwapData.deserialize<T>(jsonBody.data.data);
         data.setOfferer(this.getAddress());
 
+        if(this.WBTC_ADDRESS!=null) {
+            if(!total.eq(amount.add(totalFee))){
+                throw new IntermediaryError("Invalid total returned");
+            }
+            if(!data.isToken(this.WBTC_ADDRESS)) {
+                throw new IntermediaryError("Invalid data returned - token");
+            }
+        } else {
+            //TODO: Maybe check pricing from some exchange and determine the fees
+        }
+
         if(
-            !data.isToken(this.WBTC_ADDRESS) ||
             !data.getAmount().eq(total) ||
             data.getHash()!==hash ||
             !data.getEscrowNonce().eq(nonce) ||
@@ -242,17 +248,20 @@ abstract class ClientSwapContract<T extends SwapData> {
 
         const total = new BN(jsonBody.data.total);
 
-        if(!total.eq(sats.add(totalFee))){
-            throw new IntermediaryError("Invalid total returned");
-        }
-
         const data: T = SwapData.deserialize<T>(jsonBody.data.data);
         data.setOfferer(this.getAddress());
 
         console.log("Parsed data: ", data);
 
-        if(!data.isToken(this.WBTC_ADDRESS)) {
-            throw new IntermediaryError("Invalid data returned - token");
+        if(this.WBTC_ADDRESS!=null) {
+            if(!total.eq(sats.add(totalFee))){
+                throw new IntermediaryError("Invalid total returned");
+            }
+            if(!data.isToken(this.WBTC_ADDRESS)) {
+                throw new IntermediaryError("Invalid data returned - token");
+            }
+        } else {
+            //TODO: Maybe check the pricing from some exchange
         }
 
         if(!data.getAmount().eq(total)) {
@@ -468,14 +477,17 @@ abstract class ClientSwapContract<T extends SwapData> {
         }
 
         const swapFee = new BN(jsonBody.data.swapFee);
-        const total = amount.sub(swapFee);
 
-        if(!data.getAmount().eq(total)) {
-            throw new IntermediaryError("Invalid data returned - amount");
-        }
-
-        if(!data.isToken(this.WBTC_ADDRESS)) {
-            throw new IntermediaryError("Invalid data returned - token");
+        if(this.WBTC_ADDRESS!=null) {
+            const total = amount.sub(swapFee);
+            if(!data.getAmount().eq(total)) {
+                throw new IntermediaryError("Invalid data returned - amount");
+            }
+            if(!data.isToken(this.WBTC_ADDRESS)) {
+                throw new IntermediaryError("Invalid data returned - token");
+            }
+        } else {
+            //TODO: Check the pricing from some exchange
         }
 
         //Get intermediary's liquidity
@@ -573,7 +585,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         };
     }
 
-    async getPaymentAuthorization(bolt11PaymentReq: string, minOut: BN, url: string, requiredOffererKey?: string, abortSignal?: AbortSignal): Promise<{
+    async getPaymentAuthorization(bolt11PaymentReq: string, minOut: BN, url: string, requiredOffererKey?: string, requiredToken?: TokenAddress, abortSignal?: AbortSignal): Promise<{
         is_paid: boolean,
 
         data?: T,
@@ -616,35 +628,33 @@ abstract class ClientSwapContract<T extends SwapData> {
 
             if(requiredOffererKey!=null) {
                 if (data.getOfferer()!==requiredOffererKey) {
-                    console.error("[SmartChain.PaymentRequest] Invalid offerer used");
                     throw new IntermediaryError("Invalid offerer used");
                 }
             }
 
-            if (!data.isToken(this.WBTC_ADDRESS)) {
-                console.error("[EVM.PaymentRequest] Invalid token used");
-                throw new IntermediaryError("Invalid token used");
+            requiredToken = requiredToken || this.WBTC_ADDRESS;
+            if(requiredToken!=null) {
+                if (!data.isToken(requiredToken)) {
+                    throw new IntermediaryError("Invalid token used");
+                }
             }
-
 
             await this.isValidInitAuthorization(data, jsonBody.data.timeout, jsonBody.data.prefix, jsonBody.data.signature, jsonBody.data.nonce);
 
             const paymentHashInTx = data.getHash().toLowerCase();
 
-            console.log("[EVM.PaymentRequest] lightning payment hash: ", paymentHashInTx);
+            console.log("[SmartChain.PaymentRequest] lightning payment hash: ", paymentHashInTx);
 
             if(paymentHashInTx!==paymentHash.toLowerCase()) {
-                console.error("[EVM.PaymentRequest] lightning payment request mismatch");
                 throw (new IntermediaryError("Lightning payment request mismatch"));
             }
 
             const tokenAmount = data.getAmount();
 
-            console.log("[EVM.PaymentRequest] Token amount: ", tokenAmount.toString());
+            console.log("[SmartChain.PaymentRequest] Token amount: ", tokenAmount.toString());
 
             if(minOut!=null) {
                 if (tokenAmount.lt(minOut)) {
-                    console.error("[EVM.PaymentRequest] Not enough offered!");
                     throw (new IntermediaryError("Not enough offered!"));
                 }
             }
@@ -674,6 +684,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         minOut: BN,
         url: string,
         requiredOffererKey?: string,
+        requiredToken?: TokenAddress,
         abortSignal?: AbortSignal,
         intervalSeconds?: number,
     ) : Promise<{
@@ -688,7 +699,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         }
 
         while(!abortSignal.aborted) {
-            const result = await this.getPaymentAuthorization(bolt11PaymentReq, minOut, url, requiredOffererKey, abortSignal);
+            const result = await this.getPaymentAuthorization(bolt11PaymentReq, minOut, url, requiredOffererKey, requiredToken, abortSignal);
             if(result.is_paid) return result as any;
             await timeoutPromise(intervalSeconds || 5);
         }

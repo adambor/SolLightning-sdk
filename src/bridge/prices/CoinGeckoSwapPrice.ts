@@ -21,6 +21,10 @@ const COINS_MAP: {
     "So11111111111111111111111111111111111111112": {
         coinId: "solana",
         decimals: 9
+    },
+    "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh": {
+        coinId: "wrapped-bitcoin",
+        decimals: 8
     }
 };
 

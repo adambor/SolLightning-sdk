@@ -14,6 +14,7 @@ import * as BN from "bn.js";
 import * as bolt11 from "bolt11";
 import SwapCommitStatus from "../../SwapCommitStatus";
 import IntermediaryError from "../../../errors/IntermediaryError";
+import {TokenAddress} from "../../TokenAddress";
 
 class BTCLNtoSolWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {
 
@@ -32,30 +33,31 @@ class BTCLNtoSolWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {
      * @param amount            Amount you wish to receive in base units (satoshis)
      * @param expirySeconds     Swap expiration in seconds, setting this too low might lead to unsuccessful payments, too high and you might lose access to your funds for longer than necessary
      * @param url               Intermediary/Counterparty swap service url
+     * @param requiredToken     Token that we want to receive
      * @param requiredKey       Required key of the Intermediary
      * @param requiredBaseFee   Desired base fee reported by the swap intermediary
      * @param requiredFeePPM    Desired proportional fee report by the swap intermediary
      */
-    async create(amount: BN, expirySeconds: number, url: string, requiredKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<BTCLNtoSolSwap<T>> {
+    async create(amount: BN, expirySeconds: number, url: string, requiredToken?: TokenAddress, requiredKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<BTCLNtoSolSwap<T>> {
 
         if(!this.isInitialized) throw new Error("Not initialized, call init() first!");
 
-        const result = await this.contract.receiveLightning(amount, expirySeconds, url);
+        const result = await this.contract.receiveLightning(amount, expirySeconds, url, requiredToken, requiredBaseFee, requiredFeePPM);
 
         const parsed = bolt11.decode(result.pr);
 
-        const swapData: T = this.contract.createSwapData(ChainSwapType.HTLC, requiredKey, this.contract.getAddress(), null, null, parsed.tagsObject.payment_hash, null, null, null, null);
+        const swapData: T = this.contract.createSwapData(ChainSwapType.HTLC, requiredKey, this.contract.getAddress(), requiredToken, null, parsed.tagsObject.payment_hash, null, null, null, null);
 
-        const total = amount.sub(result.swapFee);
+        const total = result.total;
 
         if(requiredKey!=null) {
-            const liquidity = await this.contract.getIntermediaryBalance(requiredKey);
+            const liquidity = await this.contract.getIntermediaryBalance(requiredKey, requiredToken);
             if(liquidity.lt(total)) {
                 throw new IntermediaryError("Intermediary doesn't have enough liquidity");
             }
         }
 
-        const swap = new BTCLNtoSolSwap<T>(this, result.pr, result.secret, url, swapData, total);
+        const swap = new BTCLNtoSolSwap<T>(this, result.pr, result.secret, url, swapData, requiredBaseFee, requiredFeePPM, total);
 
         await swap.save();
         this.swapData[swap.getPaymentHash().toString("hex")] = swap;
@@ -149,7 +151,7 @@ class BTCLNtoSolWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {
             if(swap.state===BTCxtoSolSwapState.PR_CREATED) {
                 //Check if it's maybe already paid
                 try {
-                    const res = await this.contract.getPaymentAuthorization(swap.pr, swap.minOut, swap.url);
+                    const res = await this.contract.getPaymentAuthorization(swap.pr, swap.url, swap.data.getToken(), swap.data.getOfferer(), swap.requiredBaseFee, swap.requiredFeePPM);
                     if(res.is_paid) {
                         swap.state = BTCxtoSolSwapState.PR_PAID;
 

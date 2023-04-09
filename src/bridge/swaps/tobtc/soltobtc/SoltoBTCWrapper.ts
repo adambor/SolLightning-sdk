@@ -5,6 +5,7 @@ import SwapData from "../../SwapData";
 import ClientSwapContract from "../../ClientSwapContract";
 import ChainEvents from "../../../events/ChainEvents";
 import * as BN from "bn.js";
+import {TokenAddress} from "../../TokenAddress";
 
 class SoltoBTCWrapper<T extends SwapData> extends ISolToBTCxWrapper<T> {
 
@@ -26,15 +27,16 @@ class SoltoBTCWrapper<T extends SwapData> extends ISolToBTCxWrapper<T> {
      * @param confirmationTarget    Time preference of the transaction (in how many blocks should it confirm)
      * @param confirmations         Confirmations required for intermediary to claim the funds from PTLC (this determines the safety of swap)
      * @param url                   Intermediary/Counterparty swap service url
+     * @param requiredToken         Token that we want to send
      * @param requiredKey           Required key of the Intermediary
      * @param requiredBaseFee       Desired base fee reported by the swap intermediary
      * @param requiredFeePPM        Desired proportional fee report by the swap intermediary
      */
-    async create(address: string, amount: BN, confirmationTarget: number, confirmations: number, url: string, requiredKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<SoltoBTCSwap<T>> {
+    async create(address: string, amount: BN, confirmationTarget: number, confirmations: number, url: string, requiredToken?: TokenAddress, requiredKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<SoltoBTCSwap<T>> {
 
         if(!this.isInitialized) throw new Error("Not initialized, call init() first!");
 
-        const result = await this.contract.payOnchain(address, amount, confirmationTarget, confirmations, url, requiredKey, requiredBaseFee, requiredFeePPM);
+        const result = await this.contract.payOnchain(address, amount, confirmationTarget, confirmations, url, requiredToken, requiredKey, requiredBaseFee, requiredFeePPM);
 
         const swap = new SoltoBTCSwap(
             this,

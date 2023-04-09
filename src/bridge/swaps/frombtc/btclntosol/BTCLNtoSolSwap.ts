@@ -12,26 +12,32 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
     //State: PR_CREATED
     readonly pr: string;
     readonly secret: Buffer;
-    readonly minOut: BN;
+    readonly requiredBaseFee: BN;
+    readonly requiredFeePPM: BN;
+    readonly expectedOut: BN;
 
-    constructor(wrapper: BTCLNtoSolWrapper<T>, pr: string, secret: Buffer, url: string, data: T, minOut: BN);
+    constructor(wrapper: BTCLNtoSolWrapper<T>, pr: string, secret: Buffer, url: string, data: T, requiredBaseFee: BN, requiredFeePPM: BN, expectedOut: BN);
     constructor(wrapper: BTCLNtoSolWrapper<T>, obj: any);
 
-    constructor(wrapper: BTCLNtoSolWrapper<T>, prOrObject: string | any, secret?: Buffer, url?: string, data?: T, minOut?: BN) {
+    constructor(wrapper: BTCLNtoSolWrapper<T>, prOrObject: string | any, secret?: Buffer, url?: string, data?: T, requiredBaseFee?: BN, requiredFeePPM?: BN, expectedOut?: BN) {
         if(typeof(prOrObject)==="string") {
             super(wrapper, url, data, null, null, null, null);
             this.state = BTCxtoSolSwapState.PR_CREATED;
 
             this.pr = prOrObject;
             this.secret = secret;
-            this.minOut = minOut;
+            this.requiredBaseFee = requiredBaseFee;
+            this.requiredFeePPM = requiredFeePPM;
+            this.expectedOut = expectedOut;
         } else {
             super(wrapper, prOrObject);
             this.state = prOrObject.state;
 
             this.pr = prOrObject.pr;
             this.secret = Buffer.from(prOrObject.secret, "hex");
-            this.minOut = new BN(prOrObject.minOut);
+            this.requiredBaseFee = prOrObject.requiredBaseFee==null ? null : new BN(prOrObject.requiredBaseFee);
+            this.requiredFeePPM = prOrObject.requiredFeePPM==null ? null : new BN(prOrObject.requiredFeePPM);
+            this.expectedOut = prOrObject.expectedOut==null ? null : new BN(prOrObject.expectedOut);
         }
     }
 
@@ -40,7 +46,7 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
      */
     getOutAmount(): BN {
         if(this.data!=null && this.data.getAmount()!=null) return this.data.getAmount();
-        return this.minOut;
+        return null;
     }
 
     /**
@@ -57,7 +63,9 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
         partiallySerialized.state = this.state;
         partiallySerialized.pr = this.pr;
         partiallySerialized.secret = this.secret;
-        partiallySerialized.minOut = this.minOut.toString(10);
+        partiallySerialized.requiredBaseFee = this.requiredBaseFee==null ? null : this.requiredBaseFee.toString(10);
+        partiallySerialized.requiredFeePPM = this.requiredFeePPM==null ? null : this.requiredFeePPM.toString(10);
+        partiallySerialized.expectedOut = this.expectedOut==null ? null : this.expectedOut.toString(10);
 
         return partiallySerialized;
     }
@@ -74,7 +82,7 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
             throw new Error("Must be in PR_CREATED state!");
         }
 
-        const result = await this.wrapper.contract.waitForIncomingPaymentAuthorization(this.pr, this.minOut, this.url, this.data.getOfferer(), null, abortSignal, checkIntervalSeconds);
+        const result = await this.wrapper.contract.waitForIncomingPaymentAuthorization(this.pr, this.url, this.data.getToken(), this.data.getOfferer(), this.requiredBaseFee, this.requiredFeePPM, abortSignal, checkIntervalSeconds);
 
         if(abortSignal.aborted) throw new Error("Aborted");
 
@@ -113,12 +121,7 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
         try {
             await this.wrapper.contract.isValidInitAuthorization(this.data, this.timeout, this.prefix, this.signature, this.nonce);
         } catch (e) {
-            const result = await this.wrapper.contract.getPaymentAuthorization(this.pr, this.minOut, this.url);
-            this.data = result.data;
-            this.prefix = result.prefix;
-            this.timeout = result.timeout;
-            this.signature = result.signature;
-            this.nonce = result.nonce;
+            throw new Error("Request timed out!")
         }
 
         const txResult = await this.wrapper.contract.init(this.data, this.timeout, this.prefix, this.signature, this.nonce);
@@ -265,7 +268,7 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
         try {
             await this.wrapper.contract.isValidInitAuthorization(this.data, this.timeout, this.prefix, this.signature, this.nonce);
         } catch (e) {
-            const result = await this.wrapper.contract.getPaymentAuthorization(this.pr, this.minOut, this.url);
+            const result = await this.wrapper.contract.getPaymentAuthorization(this.pr, this.url, this.data.getToken(), this.data.getOfferer(), this.requiredBaseFee, this.requiredFeePPM);
             this.data = result.data;
             this.prefix = result.prefix;
             this.timeout = result.timeout;

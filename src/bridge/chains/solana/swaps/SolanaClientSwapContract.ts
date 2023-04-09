@@ -1124,6 +1124,10 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         return data.amount;
     }
 
+    toTokenAddress(address: string): TokenAddress {
+        return new PublicKey(address);
+    }
+
 
 }
 

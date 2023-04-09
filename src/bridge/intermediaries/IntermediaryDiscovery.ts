@@ -5,6 +5,7 @@ import SwapData from "../swaps/SwapData";
 import {randomBytes} from "crypto-browserify";
 import SwapType from "../swaps/SwapType";
 import * as BN from "bn.js";
+import {TokenAddress} from "../swaps/TokenAddress";
 
 export enum SwapHandlerType {
     TO_BTC = "TO_BTC",
@@ -18,7 +19,8 @@ export type SwapHandlerInfoType = {
     swapBaseFee: number,
     min: number,
     max: number,
-    data?: any
+    data?: any,
+    tokens: string[]
 };
 
 type InfoHandlerResponseEnvelope = {
@@ -48,7 +50,7 @@ function swapHandlerTypeToSwapType(swapHandlerType: SwapHandlerType): SwapType {
     }
 
 }
-function getIntermediaryComparator(swapType: SwapType, swapAmount: BN) {
+function getIntermediaryComparator(swapType: SwapType, swapAmount: BN, tokenAddress: TokenAddress) {
 
     if(swapType===SwapType.SOL_TO_BTC) {
         //TODO: Also take reputation into account
@@ -199,19 +201,36 @@ class IntermediaryDiscovery<T extends SwapData> {
 
         for(let node of activeNodes) {
             //Fetch reputation
-            try {
-                const reputation = await this.swapContract.getIntermediaryReputation(node.address);
-
-                const services: ServicesType = {};
-
-                for(let key in node.info.services) {
-                    services[swapHandlerTypeToSwapType(key as SwapHandlerType)] = node.info.services[key];
+            const checkReputationTokens: Set<string> = new Set<string>();
+            if(node.info.services.TO_BTC!=null) {
+                if(this.swapContract.WBTC_ADDRESS!=null) checkReputationTokens.add(this.swapContract.WBTC_ADDRESS.toString());
+                for(let token of node.info.services.TO_BTC.tokens) {
+                    checkReputationTokens.add(token);
                 }
-
-                this.intermediaries.push(new Intermediary(node.url, node.address, services, reputation));
-            } catch (e) {
-                console.error(e);
             }
+            if(node.info.services.TO_BTCLN!=null) {
+                if(this.swapContract.WBTC_ADDRESS!=null) checkReputationTokens.add(this.swapContract.WBTC_ADDRESS.toString());
+                for(let token of node.info.services.TO_BTCLN.tokens) {
+                    checkReputationTokens.add(token);
+                }
+            }
+
+            const reputation = {};
+            for(let token of checkReputationTokens) {
+                try {
+                    reputation[token] = await this.swapContract.getIntermediaryReputation(node.address, this.swapContract.toTokenAddress(token));
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            const services: ServicesType = {};
+
+            for(let key in node.info.services) {
+                services[swapHandlerTypeToSwapType(key as SwapHandlerType)] = node.info.services[key];
+            }
+
+            this.intermediaries.push(new Intermediary(node.url, node.address, services, reputation));
         }
 
         console.log("Swap intermediaries: ", this.intermediaries);
@@ -240,17 +259,18 @@ class IntermediaryDiscovery<T extends SwapData> {
         return max;
     }
 
-    getSwapCandidates(swapType: SwapType, amount: BN, count?: number): Intermediary[] {
+    getSwapCandidates(swapType: SwapType, amount: BN, tokenAddress: TokenAddress, count?: number): Intermediary[] {
 
         const candidates = this.intermediaries.filter(e => {
             const swapService = e.services[swapType];
             if(swapService==null) return false;
             if(amount.lt(new BN(swapService.min))) return false;
             if(amount.gt(new BN(swapService.max))) return false;
+            if(!swapService.tokens.includes(tokenAddress.toString())) return false;
             return true;
         });
 
-        candidates.sort(getIntermediaryComparator(swapType, amount));
+        candidates.sort(getIntermediaryComparator(swapType, amount, tokenAddress));
 
         if(count==null) {
             return candidates;

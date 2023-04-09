@@ -22,7 +22,7 @@ const COINS_MAP: {
         coinId: "solana",
         decimals: 9
     },
-    "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh": {
+    "Ag6gw668H9PLQFyP482whvGDoAseBWfgs5AfXCAK3aMj": {
         coinId: "wrapped-bitcoin",
         decimals: 8
     }

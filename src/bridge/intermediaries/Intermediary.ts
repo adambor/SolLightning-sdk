@@ -8,13 +8,15 @@ export type ServicesType = {
 };
 
 type ReputationType = {
-    [key in ChainSwapType]: {
-        successVolume: BN,
-        successCount: BN,
-        failVolume: BN,
-        failCount: BN,
-        coopCloseVolume: BN,
-        coopCloseCount: BN,
+    [token: string]: {
+        [key in ChainSwapType]: {
+            successVolume: BN,
+            successCount: BN,
+            failVolume: BN,
+            failCount: BN,
+            coopCloseVolume: BN,
+            coopCloseCount: BN,
+        }
     }
 };
 

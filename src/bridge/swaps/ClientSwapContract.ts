@@ -80,9 +80,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         ])).digest();
     }
 
-
-
-    async payOnchain(address: string, amount: BN, confirmationTarget: number, confirmations: number, url: string, requiredClaimerKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
+    async payOnchain(address: string, amount: BN, confirmationTarget: number, confirmations: number, url: string, requiredToken?: TokenAddress, requiredClaimerKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
         networkFee: BN,
         swapFee: BN,
         totalFee: BN,
@@ -125,7 +123,8 @@ abstract class ClientSwapContract<T extends SwapData> {
                 amount: amount.toString(10),
                 confirmationTarget,
                 confirmations,
-                nonce: nonce.toString(10)
+                nonce: nonce.toString(10),
+                token: requiredToken==null ? null : requiredToken.toString()
             }),
             headers: {'Content-Type': 'application/json'}
         });
@@ -163,6 +162,9 @@ abstract class ClientSwapContract<T extends SwapData> {
                 throw new IntermediaryError("Invalid data returned - token");
             }
         } else {
+            if(requiredToken!=null) if(!data.isToken(requiredToken)) {
+                throw new IntermediaryError("Invalid data returned - token");
+            }
             if(this.swapPrice!=null && requiredBaseFee!=null && requiredFeePPM!=null) {
                 if(!(await this.swapPrice.isValidAmountSend(amount, requiredBaseFee, requiredFeePPM, total.sub(networkFee), data.getToken()))) {
                     throw new IntermediaryError("Fee too high");
@@ -205,7 +207,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         };
     }
 
-    async payLightning(bolt11PayReq: string, expirySeconds: number, maxFee: BN, url: string, requiredClaimerKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
+    async payLightning(bolt11PayReq: string, expirySeconds: number, maxFee: BN, url: string, requiredToken?: TokenAddress, requiredClaimerKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
         confidence: string,
         swapFee: BN,
         data: T,
@@ -235,7 +237,8 @@ abstract class ClientSwapContract<T extends SwapData> {
             body: JSON.stringify({
                 pr: bolt11PayReq,
                 maxFee: maxFee.toString(),
-                expiryTimestamp
+                expiryTimestamp,
+                token: requiredToken==null ? null : requiredToken.toString()
             }),
             headers: {'Content-Type': 'application/json'}
         });
@@ -270,6 +273,9 @@ abstract class ClientSwapContract<T extends SwapData> {
                 throw new IntermediaryError("Invalid data returned - token");
             }
         } else {
+            if(requiredToken!=null) if(!data.isToken(requiredToken)) {
+                throw new IntermediaryError("Invalid data returned - token");
+            }
             if(this.swapPrice!=null && requiredBaseFee!=null && requiredFeePPM!=null) {
                 if(!(await this.swapPrice.isValidAmountSend(sats, requiredBaseFee.add(maxFee), requiredFeePPM, total, data.getToken()))) {
                     throw new IntermediaryError("Fee too high");
@@ -448,7 +454,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         throw new Error("Aborted");
     }
 
-    async receiveOnchain(amount: BN, url: string, requiredOffererKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
+    async receiveOnchain(amount: BN, url: string, requiredToken?: string, requiredOffererKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
         address: string,
         swapFee: BN,
         data: T,
@@ -461,7 +467,8 @@ abstract class ClientSwapContract<T extends SwapData> {
             method: "POST",
             body: JSON.stringify({
                 address: this.getAddress(),
-                amount: amount.toString()
+                amount: amount.toString(),
+                token: requiredToken==null ? null : requiredToken.toString()
             }),
             headers: {'Content-Type': 'application/json'}
         });
@@ -500,6 +507,9 @@ abstract class ClientSwapContract<T extends SwapData> {
                 throw new IntermediaryError("Invalid data returned - token");
             }
         } else {
+            if(requiredToken!=null) if(!data.isToken(requiredToken)) {
+                throw new IntermediaryError("Invalid data returned - token");
+            }
             if(this.swapPrice!=null && requiredBaseFee!=null && requiredFeePPM!=null) {
                 if(!(await this.swapPrice.isValidAmountReceive(amount, requiredBaseFee, requiredFeePPM, data.getAmount(), data.getToken()))) {
                     throw new IntermediaryError("Fee too high");
@@ -558,10 +568,11 @@ abstract class ClientSwapContract<T extends SwapData> {
 
     }
 
-    async receiveLightning(amount: BN, expirySeconds: number, url: string): Promise<{
+    async receiveLightning(amount: BN, expirySeconds: number, url: string, requiredToken?: TokenAddress, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
         secret: Buffer,
         pr: string,
-        swapFee: BN
+        swapFee: BN,
+        total: BN
     }> {
 
         const secret = randomBytes(32);
@@ -574,7 +585,8 @@ abstract class ClientSwapContract<T extends SwapData> {
                 paymentHash: paymentHash.toString("hex"),
                 amount: amount.toString(),
                 expiry: expirySeconds,
-                address: this.getAddress()
+                address: this.getAddress(),
+                token: requiredToken==null ? null : requiredToken.toString()
             }),
             headers: {'Content-Type': 'application/json'}
         });
@@ -595,14 +607,25 @@ abstract class ClientSwapContract<T extends SwapData> {
 
         if(!new BN(decodedPR.millisatoshis).div(new BN(1000)).eq(amount)) throw new IntermediaryError("Invalid payment request returned, amount mismatch");
 
+        const total = new BN(jsonBody.data.total);
+
+        if(this.WBTC_ADDRESS==null) {
+            if(this.swapPrice!=null && requiredBaseFee!=null && requiredFeePPM!=null) {
+                if(!(await this.swapPrice.isValidAmountReceive(amount, requiredBaseFee, requiredFeePPM, total, requiredToken))) {
+                    throw new IntermediaryError("Fee too high");
+                }
+            }
+        }
+
         return {
             secret,
             pr: jsonBody.data.pr,
-            swapFee: new BN(jsonBody.data.swapFee)
+            swapFee: new BN(jsonBody.data.swapFee),
+            total: new BN(jsonBody.data.total)
         };
     }
 
-    async getPaymentAuthorization(bolt11PaymentReq: string, minOut: BN, url: string, requiredOffererKey?: string, requiredToken?: TokenAddress, abortSignal?: AbortSignal): Promise<{
+    async getPaymentAuthorization(bolt11PaymentReq: string, url: string, requiredToken?: TokenAddress, requiredOffererKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN, abortSignal?: AbortSignal): Promise<{
         is_paid: boolean,
 
         data?: T,
@@ -656,6 +679,12 @@ abstract class ClientSwapContract<T extends SwapData> {
                 }
             }
 
+            if(this.swapPrice!=null && requiredBaseFee!=null && requiredFeePPM!=null) {
+                if(!(await this.swapPrice.isValidAmountReceive(new BN(decodedPR.satoshis), requiredBaseFee, requiredFeePPM, data.getAmount(), requiredToken))) {
+                    throw new IntermediaryError("Fee too high");
+                }
+            }
+
             await this.isValidInitAuthorization(data, jsonBody.data.timeout, jsonBody.data.prefix, jsonBody.data.signature, jsonBody.data.nonce);
 
             const paymentHashInTx = data.getHash().toLowerCase();
@@ -669,12 +698,6 @@ abstract class ClientSwapContract<T extends SwapData> {
             const tokenAmount = data.getAmount();
 
             console.log("[SmartChain.PaymentRequest] Token amount: ", tokenAmount.toString());
-
-            if(minOut!=null) {
-                if (tokenAmount.lt(minOut)) {
-                    throw (new IntermediaryError("Not enough offered!"));
-                }
-            }
 
             return {
                 is_paid: true,
@@ -698,10 +721,11 @@ abstract class ClientSwapContract<T extends SwapData> {
 
     async waitForIncomingPaymentAuthorization(
         bolt11PaymentReq: string,
-        minOut: BN,
         url: string,
-        requiredOffererKey?: string,
         requiredToken?: TokenAddress,
+        requiredOffererKey?: string,
+        requiredBaseFee?: BN,
+        requiredFeePPM?: BN,
         abortSignal?: AbortSignal,
         intervalSeconds?: number,
     ) : Promise<{
@@ -716,7 +740,7 @@ abstract class ClientSwapContract<T extends SwapData> {
         }
 
         while(!abortSignal.aborted) {
-            const result = await this.getPaymentAuthorization(bolt11PaymentReq, minOut, url, requiredOffererKey, requiredToken, abortSignal);
+            const result = await this.getPaymentAuthorization(bolt11PaymentReq, url, requiredToken, requiredOffererKey, requiredBaseFee, requiredFeePPM, abortSignal);
             if(result.is_paid) return result as any;
             await timeoutPromise(intervalSeconds || 5);
         }
@@ -768,6 +792,7 @@ abstract class ClientSwapContract<T extends SwapData> {
 
     abstract getIntermediaryReputation(address: string, token?: TokenAddress): Promise<IntermediaryReputationType>;
     abstract getIntermediaryBalance(address: string, token?: TokenAddress): Promise<BN>;
+    abstract toTokenAddress(address: string): TokenAddress;
 
 }
 

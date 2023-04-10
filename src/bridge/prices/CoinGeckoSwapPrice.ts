@@ -4,37 +4,74 @@ import {TokenAddress} from "../swaps/TokenAddress";
 import {PublicKey} from "@solana/web3.js";
 import fetch, {Response} from "cross-fetch";
 
-const COINS_MAP: {
+
+export type CoinsMapType = {
     [address: string]: {
         coinId: string,
         decimals: number
-    }
-} = {
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": {
-        coinId: "usd-coin",
-        decimals: 6
-    },
-    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": {
-        coinId: "tether",
-        decimals: 6
-    },
-    "So11111111111111111111111111111111111111112": {
-        coinId: "solana",
-        decimals: 9
-    },
-    "Ag6gw668H9PLQFyP482whvGDoAseBWfgs5AfXCAK3aMj": {
-        coinId: "wrapped-bitcoin",
-        decimals: 8
     }
 };
 
 class CoinGeckoSwapPrice extends ISwapPrice {
 
-    url: string;
+    static createCoinsMap(wbtcAdress?: string, usdcAddress?: string, usdtAddress?: string): CoinsMapType {
 
-    constructor(maxAllowedFeeDiffPPM: BN, url?: string) {
+        const coinMap = {
+            "So11111111111111111111111111111111111111112": {
+                coinId: "solana",
+                decimals: 9
+            }
+        };
+
+        if(wbtcAdress!=null) {
+            coinMap[wbtcAdress] = {
+                coinId: "wrapped-bitcoin",
+                decimals: 8
+            };
+        }
+        if(usdcAddress!=null) {
+            coinMap[usdcAddress] = {
+                coinId: "usd-coin",
+                decimals: 6
+            };
+        }
+        if(usdtAddress!=null) {
+            coinMap[usdtAddress] = {
+                coinId: "tether",
+                decimals: 6
+            };
+        }
+
+        return coinMap;
+
+    }
+
+    url: string;
+    COINS_MAP: CoinsMapType = {
+        "6jrUSQHX8MTJbtWpdbx65TAwUv1rLyCF6fVjr9yELS75": {
+            coinId: "usd-coin",
+            decimals: 6
+        },
+        "Ar5yfeSyDNDHyq1GvtcrDKjNcoVTQiv7JaVvuMDbGNDT": {
+            coinId: "tether",
+            decimals: 6
+        },
+        "So11111111111111111111111111111111111111112": {
+            coinId: "solana",
+            decimals: 9
+        },
+        "Ag6gw668H9PLQFyP482whvGDoAseBWfgs5AfXCAK3aMj": {
+            coinId: "wrapped-bitcoin",
+            decimals: 8
+        }
+    };
+
+    constructor(maxAllowedFeeDiffPPM: BN, coinsMap?: CoinsMapType, url?: string) {
         super(maxAllowedFeeDiffPPM);
         this.url = url || "https://api.coingecko.com/api/v3";
+        if(coinsMap!=null) {
+            this.COINS_MAP = coinsMap;
+        }
     }
 
     /**
@@ -61,14 +98,9 @@ class CoinGeckoSwapPrice extends ISwapPrice {
 
         let jsonBody: any = await response.json();
 
-        const amt: string = jsonBody[coinId].sats;
+        const amt: number = jsonBody[coinId].sats;
 
-        if(amt.includes(".")) {
-            const [num, decimal] = amt.split(".");
-            return new BN(num+decimal.padEnd(3, "0"));
-        } else {
-            return new BN(amt+"000");
-        }
+        return new BN(amt*1000);
 
     }
 
@@ -80,14 +112,16 @@ class CoinGeckoSwapPrice extends ISwapPrice {
             tokenAddress = toToken.toString();
         }
 
-        const coin = COINS_MAP[tokenAddress];
+        const coin = this.COINS_MAP[tokenAddress];
 
         if(coin==null) throw new Error("Token not found");
 
         const price = await this.getPrice(coin.coinId);
 
+        console.log("Swap price: ", price.toString(10));
+
         return fromAmount
-            .mul(new BN(coin.decimals))
+            .mul(new BN(10).pow(new BN(coin.decimals)))
             .mul(new BN(1000)) //To msat
             .div(price)
     }
@@ -100,7 +134,7 @@ class CoinGeckoSwapPrice extends ISwapPrice {
             tokenAddress = fromToken.toString();
         }
 
-        const coin = COINS_MAP[tokenAddress];
+        const coin = this.COINS_MAP[tokenAddress];
 
         if(coin==null) throw new Error("Token not found");
 

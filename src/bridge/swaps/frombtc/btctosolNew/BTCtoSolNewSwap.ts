@@ -36,6 +36,7 @@ export default class BTCtoSolNewSwap<T extends SwapData> extends IBTCxtoSolSwap<
         amount: BN,
         url: string,
         data: T,
+        swapFee: BN,
         prefix: string,
         timeout: string,
         signature: string,
@@ -49,13 +50,14 @@ export default class BTCtoSolNewSwap<T extends SwapData> extends IBTCxtoSolSwap<
         amount?: BN,
         url?: string,
         data?: T,
+        swapFee?: BN,
         prefix?: string,
         timeout?: string,
         signature?: string,
         nonce?: number,
     ) {
         if(typeof(addressOrObject)==="string") {
-            super(wrapper, url, data, prefix, timeout, signature, nonce);
+            super(wrapper, url, data, swapFee, prefix, timeout, signature, nonce);
             this.state = BTCtoSolNewSwapState.PR_CREATED;
 
             this.address = addressOrObject;

@@ -57,7 +57,7 @@ class BTCLNtoSolWrapper<T extends SwapData> extends IBTCxtoSolWrapper<T> {
             }
         }
 
-        const swap = new BTCLNtoSolSwap<T>(this, result.pr, result.secret, url, swapData, requiredBaseFee, requiredFeePPM, total);
+        const swap = new BTCLNtoSolSwap<T>(this, result.pr, result.secret, url, swapData, result.swapFee, requiredBaseFee, requiredFeePPM, total);
 
         await swap.save();
         this.swapData[swap.getPaymentHash().toString("hex")] = swap;

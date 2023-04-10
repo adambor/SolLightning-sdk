@@ -10,6 +10,7 @@ import ChainEvents from "../../events/ChainEvents";
 import SwapData from "../SwapData";
 import * as BN from "bn.js";
 import * as EventEmitter from "events";
+import {TokenAddress} from "../TokenAddress";
 
 
 abstract class ISolToBTCxWrapper<T extends SwapData> {
@@ -45,10 +46,10 @@ abstract class ISolToBTCxWrapper<T extends SwapData> {
     abstract init(): Promise<void>;
 
     /**
-     * Returns the WBTC token balance of the wallet
+     * Returns the token balance of the wallet
      */
-    getWBTCBalance(): Promise<BN> {
-        return this.contract.getBalance();
+    getBalance(token: TokenAddress): Promise<BN> {
+        return this.contract.getBalance(token);
     }
 
     /**

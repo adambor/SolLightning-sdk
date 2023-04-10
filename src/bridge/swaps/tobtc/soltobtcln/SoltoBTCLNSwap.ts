@@ -16,6 +16,7 @@ export default class SoltoBTCLNSwap<T extends SwapData> extends ISolToBTCxSwap<T
         wrapper: SoltoBTCLNWrapper<T>,
         pr: string,
         data: T,
+        swapFee: BN,
         prefix: string,
         timeout: string,
         signature: string,
@@ -29,6 +30,7 @@ export default class SoltoBTCLNSwap<T extends SwapData> extends ISolToBTCxSwap<T
         wrapper: SoltoBTCLNWrapper<T>,
         prOrObject: string | any,
         data?: T,
+        swapFee?: BN,
         prefix?: string,
         timeout?: string,
         signature?: string,
@@ -37,7 +39,7 @@ export default class SoltoBTCLNSwap<T extends SwapData> extends ISolToBTCxSwap<T
         confidence?: string,
     ) {
         if(typeof(prOrObject)==="string") {
-            super(wrapper, data, prefix, timeout, signature, nonce, url);
+            super(wrapper, data, swapFee, prefix, timeout, signature, nonce, url);
             this.confidence = parseFloat(confidence);
             this.pr = prOrObject;
         } else {
@@ -52,6 +54,10 @@ export default class SoltoBTCLNSwap<T extends SwapData> extends ISolToBTCxSwap<T
      */
     getInAmount(): BN {
         return this.data.getAmount();
+    }
+
+    getFee(): BN {
+        return this.swapFee;
     }
 
     /**

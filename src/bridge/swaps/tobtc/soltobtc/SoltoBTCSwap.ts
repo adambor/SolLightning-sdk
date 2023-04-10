@@ -50,13 +50,12 @@ export default class SoltoBTCSwap<T extends SwapData> extends ISolToBTCxSwap<T> 
         url?: string
     ) {
         if(typeof(addressOrObject)==="string") {
-            super(wrapper, data, prefix, timeout, signature, nonce, url);
+            super(wrapper, data, swapFee, prefix, timeout, signature, nonce, url);
 
             this.address = addressOrObject;
             this.amount = amount;
             this.confirmationTarget = confirmationTarget;
             this.networkFee = networkFee;
-            this.swapFee = swapFee;
             this.totalFee = totalFee;
         } else {
             super(wrapper, addressOrObject);
@@ -65,7 +64,6 @@ export default class SoltoBTCSwap<T extends SwapData> extends ISolToBTCxSwap<T> 
             this.amount = new BN(addressOrObject.amount);
             this.confirmationTarget = addressOrObject.confirmationTarget;
             this.networkFee = new BN(addressOrObject.networkFee);
-            this.swapFee = new BN(addressOrObject.swapFee);
             this.totalFee = new BN(addressOrObject.totalFee);
             this.txId = addressOrObject.txId;
         }
@@ -76,6 +74,10 @@ export default class SoltoBTCSwap<T extends SwapData> extends ISolToBTCxSwap<T> 
      */
     getInAmount(): BN {
         return this.data.getAmount();
+    }
+
+    getFee(): BN {
+        return this.totalFee;
     }
 
     /**
@@ -92,7 +94,6 @@ export default class SoltoBTCSwap<T extends SwapData> extends ISolToBTCxSwap<T> 
         partialySerialized.amount = this.amount.toString(10);
         partialySerialized.confirmationTarget = this.confirmationTarget;
         partialySerialized.networkFee = this.networkFee.toString(10);
-        partialySerialized.swapFee = this.swapFee.toString(10);
         partialySerialized.totalFee = this.totalFee.toString(10);
         partialySerialized.txId = this.txId;
 

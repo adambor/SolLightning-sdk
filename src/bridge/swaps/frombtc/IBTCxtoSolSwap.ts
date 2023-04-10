@@ -13,6 +13,7 @@ abstract class IBTCxtoSolSwap<T extends SwapData> implements ISwap {
 
     //State: PR_PAID
     data: T;
+    swapFee: BN;
     prefix: string;
     timeout: string;
     signature: string;
@@ -32,6 +33,7 @@ abstract class IBTCxtoSolSwap<T extends SwapData> implements ISwap {
         wrapper: IBTCxtoSolWrapper<T>,
         urlOrObject?: string | any,
         data?: T,
+        swapFee?: BN,
         prefix?: string,
         timeout?: string,
         signature?: string,
@@ -43,6 +45,7 @@ abstract class IBTCxtoSolSwap<T extends SwapData> implements ISwap {
             this.url = urlOrObject;
 
             this.data = data;
+            this.swapFee = swapFee;
             this.prefix = prefix;
             this.timeout = timeout;
             this.signature = signature;
@@ -51,6 +54,7 @@ abstract class IBTCxtoSolSwap<T extends SwapData> implements ISwap {
             this.url = urlOrObject.url;
 
             this.data = urlOrObject.data !=null ? SwapData.deserialize<T>(urlOrObject.data) : null;
+            this.swapFee = urlOrObject.swapFee==null ? null : new BN(urlOrObject.swapFee);
             this.prefix = urlOrObject.prefix;
             this.timeout = urlOrObject.timeout;
             this.signature = urlOrObject.signature;
@@ -72,7 +76,11 @@ abstract class IBTCxtoSolSwap<T extends SwapData> implements ISwap {
      * Returns calculated fee for the swap
      */
     getFee(): BN {
-        return this.getInAmount().sub(this.getOutAmount());
+        return this.swapFee;
+    }
+
+    getOutAmountWithoutFee(): BN {
+        return this.getOutAmount().add(this.getFee());
     }
 
     /**
@@ -176,6 +184,7 @@ abstract class IBTCxtoSolSwap<T extends SwapData> implements ISwap {
             url: this.url,
 
             data: this.data!=null ? this.data.serialize() : null,
+            swapFee: this.swapFee==null ? null : this.swapFee.toString(10),
             prefix: this.prefix,
             timeout: this.timeout,
             signature: this.signature,

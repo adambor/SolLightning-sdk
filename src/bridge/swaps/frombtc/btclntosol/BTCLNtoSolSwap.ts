@@ -16,12 +16,12 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
     readonly requiredFeePPM: BN;
     readonly expectedOut: BN;
 
-    constructor(wrapper: BTCLNtoSolWrapper<T>, pr: string, secret: Buffer, url: string, data: T, requiredBaseFee: BN, requiredFeePPM: BN, expectedOut: BN);
+    constructor(wrapper: BTCLNtoSolWrapper<T>, pr: string, secret: Buffer, url: string, data: T, swapFee: BN, requiredBaseFee: BN, requiredFeePPM: BN, expectedOut: BN);
     constructor(wrapper: BTCLNtoSolWrapper<T>, obj: any);
 
-    constructor(wrapper: BTCLNtoSolWrapper<T>, prOrObject: string | any, secret?: Buffer, url?: string, data?: T, requiredBaseFee?: BN, requiredFeePPM?: BN, expectedOut?: BN) {
+    constructor(wrapper: BTCLNtoSolWrapper<T>, prOrObject: string | any, secret?: Buffer, url?: string, data?: T, swapFee?: BN, requiredBaseFee?: BN, requiredFeePPM?: BN, expectedOut?: BN) {
         if(typeof(prOrObject)==="string") {
-            super(wrapper, url, data, null, null, null, null);
+            super(wrapper, url, data, swapFee, null, null, null, null);
             this.state = BTCxtoSolSwapState.PR_CREATED;
 
             this.pr = prOrObject;
@@ -46,7 +46,7 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
      */
     getOutAmount(): BN {
         if(this.data!=null && this.data.getAmount()!=null) return this.data.getAmount();
-        return null;
+        return this.expectedOut;
     }
 
     /**

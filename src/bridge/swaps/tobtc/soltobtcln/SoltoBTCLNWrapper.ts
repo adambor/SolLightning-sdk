@@ -60,6 +60,7 @@ class SoltoBTCLNWrapper<T extends SwapData> extends ISolToBTCxWrapper<T> {
             this,
             bolt11PayRequest,
             result.data,
+            result.swapFee.add(result.maxFee),
             result.prefix,
             result.timeout,
             result.signature,

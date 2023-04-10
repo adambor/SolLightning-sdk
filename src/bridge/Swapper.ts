@@ -2,7 +2,7 @@ import SoltoBTCLNWrapper from "./swaps/tobtc/soltobtcln/SoltoBTCLNWrapper";
 import SoltoBTCWrapper from "./swaps/tobtc/soltobtc/SoltoBTCWrapper";
 import BTCLNtoSolWrapper from "./swaps/frombtc/btclntosol/BTCLNtoSolWrapper";
 import LocalWrapperStorage from "./storage/LocalWrapperStorage";
-import {AnchorProvider, BN, Wallet} from "@project-serum/anchor";
+import {AnchorProvider, BN} from "@project-serum/anchor";
 import ISwap from "./swaps/ISwap";
 import ISolToBTCxSwap from "./swaps/tobtc/ISolToBTCxSwap";
 import IBTCxtoSolSwap from "./swaps/frombtc/IBTCxtoSolSwap";
@@ -13,7 +13,7 @@ import * as bitcoin from "bitcoinjs-lib";
 import * as bolt11 from "bolt11";
 import SwapType from "./swaps/SwapType";
 import {Bitcoin, ConstantBTCLNtoSol, ConstantBTCtoSol, ConstantSoltoBTC, ConstantSoltoBTCLN} from "../Constants";
-import {Connection, Keypair, PublicKey} from "@solana/web3.js";
+import {Connection, Keypair, PublicKey, Signer} from "@solana/web3.js";
 import BTCtoSolNewWrapper from "./swaps/frombtc/btctosolNew/BTCtoSolNewWrapper";
 import BTCtoSolNewSwap from "./swaps/frombtc/btctosolNew/BTCtoSolNewSwap";
 import SolanaSwapData from "./chains/solana/swaps/SolanaSwapData";
@@ -27,7 +27,7 @@ import CoinGeckoSwapPrice from "./prices/CoinGeckoSwapPrice";
 
 type SwapperOptions = {
     intermediaryUrl?: string,
-    wbtcToken?: PublicKey,
+    //wbtcToken?: PublicKey,
     pricing?: ISwapPrice
 };
 
@@ -77,9 +77,10 @@ export default class SolanaSwapper {
         let options: SwapperOptions;
         if(typeof(providerOrRpcUrl)==="string") {
             options = noneOrOptions;
-            provider = new AnchorProvider(new Connection(providerOrRpcUrl), new Wallet(optionsOrKeypair as Keypair), {
-                commitment: "confirmed"
-            });
+            // provider = new AnchorProvider(new Connection(providerOrRpcUrl), new Wall(optionsOrKeypair as Keypair), {
+            //     commitment: "confirmed"
+            // });
+            throw new Error("Unsupported");
         } else {
             provider = providerOrRpcUrl;
             options = optionsOrKeypair as SwapperOptions;
@@ -87,7 +88,7 @@ export default class SolanaSwapper {
 
         options = options || {};
 
-        const swapContract = new SolanaClientSwapContract(provider, options.wbtcToken, options.pricing);
+        const swapContract = new SolanaClientSwapContract(provider, null, options.pricing);
         const chainEvents = new SolanaChainEvents(provider, swapContract);
 
         this.soltobtcln = new SoltoBTCLNWrapper(new LocalWrapperStorage("solSwaps-SoltoBTCLN"), swapContract, chainEvents);
@@ -178,13 +179,13 @@ export default class SolanaSwapper {
     /**
      * Creates Solana -> BTC swap
      *
+     * @param tokenAddress          Token address to pay with
      * @param address               Recipient's bitcoin address
      * @param amount                Amount to send in satoshis (bitcoin's smallest denomination)
      * @param confirmationTarget    How soon should the transaction be confirmed (determines the fee)
      * @param confirmations         How many confirmations must the intermediary wait to claim the funds
-     * @param tokenAddress          Token address to pay with
      */
-    async createSolToBTCSwap(address: string, amount: BN, confirmationTarget?: number, confirmations?: number, tokenAddress?: PublicKey): Promise<SoltoBTCSwap<SolanaSwapData>> {
+    async createSolToBTCSwap(tokenAddress: PublicKey, address: string, amount: BN, confirmationTarget?: number, confirmations?: number): Promise<SoltoBTCSwap<SolanaSwapData>> {
         if(this.intermediaryUrl!=null) {
             return this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, this.intermediaryUrl+"/tobtc");
         }
@@ -215,11 +216,11 @@ export default class SolanaSwapper {
     /**
      * Creates Solana -> BTCLN swap
      *
+     * @param tokenAddress          Token address to pay with
      * @param paymentRequest        BOLT11 lightning network invoice to be paid (needs to have a fixed amount)
      * @param expirySeconds         For how long to lock your funds (higher expiry means higher probability of payment success)
-     * @param tokenAddress          Token address to pay with
      */
-    async createSolToBTCLNSwap(paymentRequest: string, expirySeconds?: number, tokenAddress?: PublicKey): Promise<SoltoBTCLNSwap<SolanaSwapData>> {
+    async createSolToBTCLNSwap(tokenAddress: PublicKey, paymentRequest: string, expirySeconds?: number): Promise<SoltoBTCLNSwap<SolanaSwapData>> {
         if(this.intermediaryUrl!=null) {
             return this.soltobtcln.create(paymentRequest, expirySeconds || (3 * 24 * 3600), this.intermediaryUrl + "/tobtcln");
         }
@@ -252,10 +253,10 @@ export default class SolanaSwapper {
     /**
      * Creates BTC -> Solana swap
      *
-     * @param amount                Amount to receive, in satoshis (bitcoin's smallest denomination)
      * @param tokenAddress          Token address to receive
+     * @param amount                Amount to receive, in satoshis (bitcoin's smallest denomination)
      */
-    async createBTCtoSolSwap(amount: BN, tokenAddress?: PublicKey): Promise<BTCtoSolNewSwap<SolanaSwapData>> {
+    async createBTCtoSolSwap(tokenAddress: PublicKey, amount: BN): Promise<BTCtoSolNewSwap<SolanaSwapData>> {
         if(this.intermediaryUrl!=null) {
             return this.btctosol.create(amount, this.intermediaryUrl+"/frombtc");
         }
@@ -286,11 +287,11 @@ export default class SolanaSwapper {
     /**
      * Creates BTCLN -> Solana swap
      *
+     * @param tokenAddress      Token address to receive
      * @param amount            Amount to receive, in satoshis (bitcoin's smallest denomination)
      * @param invoiceExpiry     Lightning invoice expiry time (in seconds)
-     * @param tokenAddress      Token address to receive
      */
-    async createBTCLNtoSolSwap(amount: BN, invoiceExpiry?: number, tokenAddress?: PublicKey): Promise<BTCLNtoSolSwap<SolanaSwapData>> {
+    async createBTCLNtoSolSwap(tokenAddress: PublicKey, amount: BN, invoiceExpiry?: number): Promise<BTCLNtoSolSwap<SolanaSwapData>> {
         if(this.intermediaryUrl!=null) {
             return this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), this.intermediaryUrl+"/frombtcln");
         }

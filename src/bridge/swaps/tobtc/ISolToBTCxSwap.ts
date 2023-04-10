@@ -14,6 +14,7 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
 
     data: T;
 
+    swapFee: BN;
     prefix: string;
     timeout: string;
     signature: string;
@@ -34,6 +35,7 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
     protected constructor(
         wrapper: ISolToBTCxWrapper<T>,
         prOrObject: T | any,
+        swapFee?: BN,
         prefix?: string,
         timeout?: string,
         signature?: string,
@@ -49,6 +51,7 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
 
             this.data = prOrObject;
 
+            this.swapFee = swapFee;
             this.prefix = prefix;
             this.timeout = timeout;
             this.signature = signature;
@@ -62,6 +65,7 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
 
             this.data = prOrObject.data!=null ? SwapData.deserialize<T>(prOrObject.data) : null;
 
+            this.swapFee = prOrObject.swapFee==null ? null : new BN(prOrObject.swapFee);
             this.prefix = prOrObject.prefix;
             this.timeout = prOrObject.timeout;
             this.signature = prOrObject.signature;
@@ -94,8 +98,10 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
     /**
      * Returns calculated fee for the swap
      */
-    getFee(): BN {
-        return this.getInAmount().sub(this.getOutAmount());
+    abstract getFee(): BN;
+
+    getInAmountWithoutFee(): BN {
+        return this.getInAmount().sub(this.getFee());
     }
 
     /**
@@ -273,6 +279,7 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
             url: this.url,
             secret: this.secret,
             data: this.data!=null ? this.data.serialize() : null,
+            swapFee: this.swapFee==null ? null : this.swapFee.toString(10),
             prefix: this.prefix,
             timeout: this.timeout,
             signature: this.signature,

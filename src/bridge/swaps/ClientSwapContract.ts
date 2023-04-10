@@ -209,6 +209,7 @@ abstract class ClientSwapContract<T extends SwapData> {
 
     async payLightning(bolt11PayReq: string, expirySeconds: number, maxFee: BN, url: string, requiredToken?: TokenAddress, requiredClaimerKey?: string, requiredBaseFee?: BN, requiredFeePPM?: BN): Promise<{
         confidence: string,
+        maxFee: BN,
         swapFee: BN,
         data: T,
         prefix: string,
@@ -255,8 +256,9 @@ abstract class ClientSwapContract<T extends SwapData> {
 
         let jsonBody: any = await response.json();
 
+        const maxFeeInToken = new BN(jsonBody.data.maxFee);
         const swapFee = new BN(jsonBody.data.swapFee);
-        const totalFee = swapFee.add(maxFee);
+        const totalFee = swapFee.add(maxFeeInToken);
 
         const total = new BN(jsonBody.data.total);
 
@@ -322,6 +324,7 @@ abstract class ClientSwapContract<T extends SwapData> {
 
         return {
             confidence: jsonBody.data.confidence,
+            maxFee: maxFeeInToken,
             swapFee: swapFee,
             data,
             prefix: jsonBody.data.prefix,

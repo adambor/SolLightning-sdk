@@ -204,13 +204,13 @@ class IntermediaryDiscovery<T extends SwapData> {
             const checkReputationTokens: Set<string> = new Set<string>();
             if(node.info.services.TO_BTC!=null) {
                 if(this.swapContract.WBTC_ADDRESS!=null) checkReputationTokens.add(this.swapContract.WBTC_ADDRESS.toString());
-                for(let token of node.info.services.TO_BTC.tokens) {
+                if(node.info.services.TO_BTC.tokens!=null) for(let token of node.info.services.TO_BTC.tokens) {
                     checkReputationTokens.add(token);
                 }
             }
             if(node.info.services.TO_BTCLN!=null) {
                 if(this.swapContract.WBTC_ADDRESS!=null) checkReputationTokens.add(this.swapContract.WBTC_ADDRESS.toString());
-                for(let token of node.info.services.TO_BTCLN.tokens) {
+                if(node.info.services.TO_BTCLN.tokens!=null) for(let token of node.info.services.TO_BTCLN.tokens) {
                     checkReputationTokens.add(token);
                 }
             }
@@ -266,6 +266,7 @@ class IntermediaryDiscovery<T extends SwapData> {
             if(swapService==null) return false;
             if(amount.lt(new BN(swapService.min))) return false;
             if(amount.gt(new BN(swapService.max))) return false;
+            if(swapService.tokens==null) return false;
             if(!swapService.tokens.includes(tokenAddress.toString())) return false;
             return true;
         });

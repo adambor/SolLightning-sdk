@@ -19,34 +19,70 @@ Is the node handling the Bitcoin <-> Solana cross-chain swaps. Implementation [h
 For now this SDK needs to configured as to which intermediary node to use. In the future there should be a registry containing all the nodes (with their reputation and swap fees) so client SDK can choose the desired node itself automatically, or try sending the swap request to multiple nodes, should one of them fail or not have enough liquidity.
 
 ## How to use?
-### Initialization
-1. Get the wallet and connection
+### Peparations
+```javascript
+//React, using solana wallet adapter
+const wallet = useAnchorWallet();
+const {connection} = useConnection();
+```
+or
+```javascript
+//Creating a wallet and connection from scratch
+const signer = Keypair.fromSecretKey(_privateKey); //Or Keypair.generate() to generate new one
+const wallet = new Wallet(signer);   
+const connection = new Connection(_solanaRpcUrl, "processed");
+```
+
+### Initialization (using own intermediary node)
+1. Create swap price checker
     ```javascript
-    //React, using solana wallet adapter
-    const wallet = useAnchorWallet();
-    const {connection} = useConnection();
-    ```
-    or
-    ```javascript
-    //Creating a wallet and connection from scratch
-    const signer = Keypair.fromSecretKey(_privateKey); //Or Keypair.generate() to generate new one
-    const wallet = new Wallet(signer);   
-    const connection = new Connection(_solanaRpcUrl, "processed");
+    //Defines swap token amount differences tolerance in PPM (1000000 = 100%)
+    const _swapDifferenceTolerance = 2500; //Max allowed difference 0.25%
+    //Create swap pricing instance
+    const swapPricing = new CoinGeckoSwapPrice(
+       new BN(_swapDifferenceTolerance),
+       CoinGeckoSwapPrice.createCoinsMap(_wbtcAddress, _usdcAddress, _usdtAddress) //Addresses of created WBTC, USDC and USDT tokens from intermediary instance - see intermediary node's instructions
+    );
     ```
 2. Create AnchorProvider and initialize swapper
     ```javascript
     //Create anchor provider
     const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
     //Create the swapper instance
-    const swapper = new Swapper(anchorProvider, _urlOfIntermediary, _wbtcTokenPubkey); //URL of the running intermediary node instance, and token mint pubkey (address) of the WBTC token minted on devnet (see intermediary node's instructions)
+    const swapper = new Swapper(anchorProvider, {
+       swapPrice: swapPricing,
+       intermediaryUrl: _intermediaryUrl //URL of the running intermediary node instance
+    });
+    //Initialize the swapper
+    await swapper.init();
+    ```
+
+### Initialization (using existing node registry)
+Existing token addresses:
+ * __WBTC__: Ag6gw668H9PLQFyP482whvGDoAseBWfgs5AfXCAK3aMj
+ * __USDC__: 6jrUSQHX8MTJbtWpdbx65TAwUv1rLyCF6fVjr9yELS75
+ * __USDT__: Ar5yfeSyDNDHyq1GvtcrDKjNcoVTQiv7JaVvuMDbGNDT
+1. Create swap price checker
+    ```javascript
+    //Defines swap token amount differences tolerance in PPM (1000000 = 100%)
+    const _swapDifferenceTolerance = 2500; //Max allowed difference 0.25%
+    //Create swap pricing instance
+    const swapPricing = new CoinGeckoSwapPrice(new BN(_swapDifferenceTolerance));
+    ```
+2. Create AnchorProvider and initialize swapper
+    ```javascript
+    //Create anchor provider
+    const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
+    //Create the swapper instance
+    const swapper = new Swapper(anchorProvider, {swapPrice: swapPricing});
     //Initialize the swapper
     await swapper.init();
     ```
 
 ### Swap Solana -> BTC
 ```javascript
-//Create the swap
-const swap = await swapper.createSolToBTCSwap(_address, _amount);
+//Create the swap: swapping _useToken to BTC
+const swap = await swapper.createSolToBTCSwap(new PublicKey(_useToken), _address, _amount);
 //Get the amount required to pay and fee
 const amountToBePaid = swap.getInAmount();
 const fee = swap.getFee();
@@ -64,8 +100,8 @@ if(!result) {
 
 ### Swap Solana -> BTCLN
 ```javascript
-//Create the swap
-const swap = await swapper.createSolToBTCLNSwap(_lightningInvoice);
+//Create the swap: swapping _useToken to BTC
+const swap = await swapper.createSolToBTCLNSwap(new PublicKey(_useToken), _lightningInvoice);
 //Get the amount required to pay and fee
 const amountToBePaid = swap.getInAmount();
 const fee = swap.getFee();
@@ -83,8 +119,8 @@ if(!result) {
 
 ### Swap BTC -> Solana
 ```javascript
-//Create the swap
-const swap = await swapper.createBTCtoSolSwap(_amount);
+//Create the swap: swapping BTC to _useToken
+const swap = await swapper.createBTCtoSolSwap(new PublicKey(_useToken), _amount);
 const amountToBePaidOnBitcoin = swap.getInAmount(); //The amount received MUST match
 const amountToBeReceivedOnSolana = swap.getOutAmount(); //Get the amount we will receive on Solana
 const fee = swap.getFee();
@@ -102,7 +138,7 @@ const expiryTime = swap.getTimeoutTime();
 try {
     //Wait for the payment to arrive
     await swap.waitForPayment(null, null, (txId: string, confirmations: number, targetConfirmations: number) => {
-        //Updates about the swap state, txId, current confirmations of the transaction, required target confirmations, amount of the transaction received, updated totalFee (as on-chain fees may change), and resulting amount of token received.
+        //Updates about the swap state, txId, current confirmations of the transaction, required target confirmations
     });
     //Claim the swap funds
     await swap.claim();
@@ -113,8 +149,8 @@ try {
 
 ### Swap BTCLN -> Solana
 ```javascript
-//Create the swap
-const swap = await swapper.createBTCLNtoSolSwap(_amount);
+//Create the swap: swapping BTC to _useToken
+const swap = await swapper.createBTCLNtoSolSwap(new PublicKey(_useToken), _amount);
 //Get the bitcoin lightning network invoice (the invoice contains pre-entered amount)
 const receivingLightningInvoice = swap.getAddress();
 //Get the QR code (contains the lightning network invoice)

@@ -1,6 +1,6 @@
 {
   "name": "sollightning-sdk",
-  "version": "1.0.39",
+  "version": "1.0.40",
   "description": "SDK for cross-chain swaps between solana and bitcoin",
   "main": "./dist/index.esm.js",
   "types:": "./dist/index.d.ts",

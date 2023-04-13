@@ -112,7 +112,7 @@ export default class SoltoBTCSwap<T extends SwapData> extends ISolToBTCxSwap<T> 
     async waitForPayment(abortSignal?: AbortSignal, checkIntervalSeconds?: number): Promise<boolean> {
         const result = await this.wrapper.contract.waitForRefundAuthorization(this.data, this.url, abortSignal, checkIntervalSeconds);
 
-        if(abortSignal.aborted) throw new Error("Aborted");
+        if(abortSignal!=null && abortSignal.aborted) throw new Error("Aborted");
 
         if(!result.is_paid) {
             this.state = SolToBTCxSwapState.REFUNDABLE;

@@ -183,7 +183,7 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
     async waitForPayment(abortSignal?: AbortSignal, checkIntervalSeconds?: number): Promise<boolean> {
         const result = await this.wrapper.contract.waitForRefundAuthorization(this.data, this.url, abortSignal, checkIntervalSeconds);
 
-        if(abortSignal.aborted) throw new Error("Aborted");
+        if(abortSignal!=null && abortSignal.aborted) throw new Error("Aborted");
 
         if(!result.is_paid) {
             this.state = SolToBTCxSwapState.REFUNDABLE;
@@ -304,6 +304,20 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
 
     getWrapper(): ISolToBTCxWrapper<T> {
         return this.wrapper;
+    }
+
+    /**
+     * Get the estimated solana fee of the commit transaction
+     */
+    getCommitFee(): BN {
+        return this.getWrapper().contract.getCommitFee();
+    }
+
+    /**
+     * Get the estimated solana transaction fee of the refund transaction
+     */
+    getRefundFee(): BN {
+        return this.getWrapper().contract.getRefundFee();
     }
 
 }

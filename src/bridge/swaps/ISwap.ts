@@ -35,6 +35,11 @@ interface ISwap {
     getType(): SwapType;
 
     /**
+     * Get the estimated solana fee of the commit transaction
+     */
+    getCommitFee(): BN;
+
+    /**
      * Event emitter emitting "swapState" event when swap's state changes
      */
     events: EventEmitter;

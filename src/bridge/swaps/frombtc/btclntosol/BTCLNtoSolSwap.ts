@@ -319,4 +319,11 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
         return SwapType.BTCLN_TO_SOL;
     }
 
+    /**
+     * Estimated transaction fee for commitAndClaim tx
+     */
+    getCommitAndClaimFee(): BN {
+        return this.getCommitFee().add(this.getClaimFee());
+    }
+
 }

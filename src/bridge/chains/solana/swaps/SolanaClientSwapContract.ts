@@ -24,7 +24,7 @@ import {TokenAddress} from "../../../swaps/TokenAddress";
 import * as BN from "bn.js";
 import SwapCommitStatus from "../../../swaps/SwapCommitStatus";
 import Utils from "../../../../Utils";
-import {ConstantBTCLNtoSol, ConstantSoltoBTCLN} from "../../../../Constants";
+import {ConstantBTCLNtoSol, ConstantSoltoBTCLN, WSOL_ADDRESS} from "../../../../Constants";
 import {sign} from "tweetnacl";
 import ChainUtils from "../../../../ChainUtils";
 import * as bitcoin from "bitcoinjs-lib";
@@ -105,11 +105,27 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         return this.provider.publicKey.toBase58();
     }
 
-    async getBalance(token?: TokenAddress): Promise<BN> {
-        const ata = getAssociatedTokenAddressSync(token || this.WBTC_ADDRESS, this.provider.publicKey);
-        const account = await getAccount(this.provider.connection, ata);
+    async getBalance(token?: PublicKey): Promise<BN> {
+        const ata: PublicKey = getAssociatedTokenAddressSync(token || this.WBTC_ADDRESS, this.provider.publicKey);
+        let ataExists: boolean = false;
+        let sum: BN = new BN(0);
+        try {
+            const account = await getAccount(this.provider.connection, ata);
+            if(account!=null) {
+                ataExists = true;
+            }
+            sum = sum.add(new BN(account.amount.toString()));
+        } catch (e) {}
 
-        return new BN(account.amount.toString());
+        if(token!=null && token.equals(WSOL_ADDRESS)) {
+            let balanceLamports = new BN(await this.provider.connection.getBalance(this.provider.publicKey));
+            if(!ataExists) balanceLamports = balanceLamports.sub(new BN(2039280));
+            balanceLamports = balanceLamports.sub(this.getCommitFee()); //Discount commit fee
+            balanceLamports = balanceLamports.sub(new BN(5000)); //Discount refund fee
+            if(!balanceLamports.isNeg()) sum = sum.add(balanceLamports);
+        }
+
+        return sum;
     }
 
     async getCommitStatus(data: SolanaSwapData): Promise<SwapCommitStatus> {
@@ -1126,6 +1142,24 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
 
     toTokenAddress(address: string): TokenAddress {
         return new PublicKey(address);
+    }
+
+    getClaimFee(): BN {
+        return new BN(-2707440+5000);
+    }
+
+    /**
+     * Get the estimated solana fee of the commit transaction
+     */
+    getCommitFee(): BN {
+        return new BN(2707440+10000);
+    }
+
+    /**
+     * Get the estimated solana transaction fee of the refund transaction
+     */
+    getRefundFee(): BN {
+        return new BN(-2707440+10000);
     }
 
 

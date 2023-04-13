@@ -232,7 +232,7 @@ class ChainUtils {
             throw new Error("Aborted");
         }
 
-        while(!abortSignal.aborted) {
+        while(abortSignal==null || !abortSignal.aborted) {
             const result = await ChainUtils.checkAddressTxos(address, txoHash);
             if(result!=null) {
                 let confirmations = 0;

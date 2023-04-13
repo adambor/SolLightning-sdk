@@ -448,7 +448,7 @@ abstract class ClientSwapContract<T extends SwapData> {
             throw new Error("Aborted");
         }
 
-        while(abortSignal!=null && !abortSignal.aborted) {
+        while(abortSignal==null || !abortSignal.aborted) {
             const result = await this.getRefundAuthorization(data, url);
             if(result!=null) return result;
             await timeoutPromise(intervalSeconds || 5);
@@ -742,7 +742,7 @@ abstract class ClientSwapContract<T extends SwapData> {
             throw new Error("Aborted");
         }
 
-        while(!abortSignal.aborted) {
+        while(abortSignal==null || !abortSignal.aborted) {
             const result = await this.getPaymentAuthorization(bolt11PaymentReq, url, requiredToken, requiredOffererKey, requiredBaseFee, requiredFeePPM, abortSignal);
             if(result.is_paid) return result as any;
             await timeoutPromise(intervalSeconds || 5);
@@ -796,6 +796,10 @@ abstract class ClientSwapContract<T extends SwapData> {
     abstract getIntermediaryReputation(address: string, token?: TokenAddress): Promise<IntermediaryReputationType>;
     abstract getIntermediaryBalance(address: string, token?: TokenAddress): Promise<BN>;
     abstract toTokenAddress(address: string): TokenAddress;
+
+    abstract getCommitFee(): BN;
+    abstract getClaimFee(): BN;
+    abstract getRefundFee(): BN;
 
 }
 

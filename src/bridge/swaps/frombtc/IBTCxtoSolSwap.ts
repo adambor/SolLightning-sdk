@@ -192,6 +192,14 @@ abstract class IBTCxtoSolSwap<T extends SwapData> implements ISwap {
         };
     }
 
+    getCommitFee(): BN {
+        return this.getWrapper().contract.getCommitFee();
+    }
+
+    getClaimFee(): BN {
+        return this.getWrapper().contract.getClaimFee();
+    }
+
 }
 
 export enum BTCxtoSolSwapState {

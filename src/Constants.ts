@@ -40,6 +40,7 @@ export const ConstantBTCtoSol = {
 
 export const Bitcoin = {
     satsMultiplier: new BN("100000000"),
-    blockTime: 10*60,
-    wbtcToken: new PublicKey("Ag6gw668H9PLQFyP482whvGDoAseBWfgs5AfXCAK3aMj")
+    blockTime: 10*60
 };
+
+export const WSOL_ADDRESS = new PublicKey("So11111111111111111111111111111111111111112");

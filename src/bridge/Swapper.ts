@@ -2,7 +2,7 @@ import SoltoBTCLNWrapper from "./swaps/tobtc/soltobtcln/SoltoBTCLNWrapper";
 import SoltoBTCWrapper from "./swaps/tobtc/soltobtc/SoltoBTCWrapper";
 import BTCLNtoSolWrapper from "./swaps/frombtc/btclntosol/BTCLNtoSolWrapper";
 import LocalWrapperStorage from "./storage/LocalWrapperStorage";
-import {AnchorProvider, BN} from "@project-serum/anchor";
+import {AnchorProvider, BN, Wallet} from "@project-serum/anchor";
 import ISwap from "./swaps/ISwap";
 import ISolToBTCxSwap from "./swaps/tobtc/ISolToBTCxSwap";
 import IBTCxtoSolSwap from "./swaps/frombtc/IBTCxtoSolSwap";
@@ -24,6 +24,7 @@ import IntermediaryError from "./errors/IntermediaryError";
 import ISwapPrice from "./swaps/ISwapPrice";
 import {TokenAddress} from "./swaps/TokenAddress";
 import CoinGeckoSwapPrice from "./prices/CoinGeckoSwapPrice";
+import KeypairWallet from "./wallet/KeypairWallet";
 
 type SwapperOptions = {
     intermediaryUrl?: string,
@@ -69,6 +70,17 @@ export default class SolanaSwapper {
         return false;
     }
 
+    /**
+     * Returns satoshi value of BOLT11 bitcoin lightning invoice WITH AMOUNT
+     *
+     * @param lnpr
+     */
+    static getLightningInvoiceValue(lnpr: string): BN {
+        const parsed = bolt11.decode(lnpr);
+        if(parsed.satoshis!=null) return new BN(parsed.satoshis);
+        return null;
+    }
+
     constructor(provider: AnchorProvider, options?: SwapperOptions);
     constructor(rpcUrl: string, keypair: Keypair, options?: SwapperOptions);
 
@@ -77,10 +89,9 @@ export default class SolanaSwapper {
         let options: SwapperOptions;
         if(typeof(providerOrRpcUrl)==="string") {
             options = noneOrOptions;
-            // provider = new AnchorProvider(new Connection(providerOrRpcUrl), new Wall(optionsOrKeypair as Keypair), {
-            //     commitment: "confirmed"
-            // });
-            throw new Error("Unsupported");
+            provider = new AnchorProvider(new Connection(providerOrRpcUrl), new KeypairWallet(optionsOrKeypair as Keypair), {
+                commitment: "confirmed"
+            });
         } else {
             provider = providerOrRpcUrl;
             options = optionsOrKeypair as SwapperOptions;

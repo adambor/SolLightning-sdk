@@ -18,7 +18,9 @@ import {
     getAssociatedTokenAddressSync,
     getAccount,
     TOKEN_PROGRAM_ID,
-    createAssociatedTokenAccountInstruction
+    createAssociatedTokenAccountInstruction,
+    createSyncNativeInstruction,
+    createTransferInstruction
 } from "@solana/spl-token";
 import {TokenAddress} from "../../../swaps/TokenAddress";
 import * as BN from "bn.js";
@@ -105,6 +107,10 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         return this.provider.publicKey.toBase58();
     }
 
+    getATARentExemptLamports(): Promise<BN> {
+        return Promise.resolve(new BN(2039280));
+    }
+
     async getBalance(token?: PublicKey): Promise<BN> {
         const ata: PublicKey = getAssociatedTokenAddressSync(token || this.WBTC_ADDRESS, this.provider.publicKey);
         let ataExists: boolean = false;
@@ -113,13 +119,13 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
             const account = await getAccount(this.provider.connection, ata);
             if(account!=null) {
                 ataExists = true;
+                sum = sum.add(new BN(account.amount.toString()));
             }
-            sum = sum.add(new BN(account.amount.toString()));
         } catch (e) {}
 
         if(token!=null && token.equals(WSOL_ADDRESS)) {
             let balanceLamports = new BN(await this.provider.connection.getBalance(this.provider.publicKey));
-            if(!ataExists) balanceLamports = balanceLamports.sub(new BN(2039280));
+            if(!ataExists) balanceLamports = balanceLamports.sub(await this.getATARentExemptLamports());
             balanceLamports = balanceLamports.sub(this.getCommitFee()); //Discount commit fee
             balanceLamports = balanceLamports.sub(new BN(5000)); //Discount refund fee
             if(!balanceLamports.isNeg()) sum = sum.add(balanceLamports);
@@ -796,6 +802,44 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const ata = getAssociatedTokenAddressSync(data.token, data.offerer);
         const ataIntermediary = getAssociatedTokenAddressSync(data.token, data.intermediary);
 
+        const ixs: TransactionInstruction[] = [];
+
+        const signatureVerificationInstruction = Ed25519Program.createInstructionWithPublicKey({
+            message: messageBuffer,
+            publicKey: data.intermediary.toBuffer(),
+            signature: Buffer.from(signature, "hex")
+        });
+
+        console.log("Sig verify: ", signatureVerificationInstruction);
+
+        ixs.push(signatureVerificationInstruction);
+
+        if(data.token.equals(WSOL_ADDRESS)) {
+            let balance = new BN(0);
+            let accountExists = false;
+            try {
+                const ataAcc = await getAccount(this.provider.connection, ata);
+                if(ataAcc!=null) {
+                    accountExists = true;
+                    balance = balance.add(new BN(ataAcc.amount.toString()));
+                }
+            } catch (e) {}
+            if(balance.lt(data.amount)) {
+                //Need to wrap some more
+                const remainder = data.amount.sub(balance);
+                if(!accountExists) {
+                    //Need to create account
+                    ixs.push(createAssociatedTokenAccountInstruction(this.provider.publicKey, ata, this.provider.publicKey, data.token));
+                }
+                ixs.push(SystemProgram.transfer({
+                    fromPubkey: this.provider.publicKey,
+                    toPubkey: ata,
+                    lamports: remainder.toNumber()
+                }));
+                ixs.push(createSyncNativeInstruction(ata));
+            }
+        }
+
         console.log("Authority key: ", this.vaultAuthorityKey);
 
         const ix = await this.program.methods
@@ -831,15 +875,9 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
 
         console.log("Created init ix: ", ix);
 
-        const signatureVerificationInstruction = Ed25519Program.createInstructionWithPublicKey({
-            message: messageBuffer,
-            publicKey: data.intermediary.toBuffer(),
-            signature: Buffer.from(signature, "hex")
-        });
+        ixs.push(ix);
 
-        console.log("Sig verify: ", signatureVerificationInstruction);
-
-        return [signatureVerificationInstruction, ix];
+        return ixs;
     }
 
     async createPayTx(data: SolanaSwapData, authTimeout: string, prefix: string, signature: string, nonce: number): Promise<Transaction> {

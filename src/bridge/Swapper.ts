@@ -2,7 +2,7 @@ import SoltoBTCLNWrapper from "./swaps/tobtc/soltobtcln/SoltoBTCLNWrapper";
 import SoltoBTCWrapper from "./swaps/tobtc/soltobtc/SoltoBTCWrapper";
 import BTCLNtoSolWrapper from "./swaps/frombtc/btclntosol/BTCLNtoSolWrapper";
 import LocalWrapperStorage from "./storage/LocalWrapperStorage";
-import {AnchorProvider, BN, Wallet} from "@project-serum/anchor";
+import {AnchorProvider, BN, Wallet} from "@coral-xyz/anchor";
 import ISwap from "./swaps/ISwap";
 import ISolToBTCxSwap from "./swaps/tobtc/ISolToBTCxSwap";
 import IBTCxtoSolSwap from "./swaps/frombtc/IBTCxtoSolSwap";

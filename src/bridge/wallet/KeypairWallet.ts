@@ -1,5 +1,5 @@
-import {Wallet} from "@project-serum/anchor";
-import {Keypair, PublicKey, Transaction} from "@solana/web3.js";
+import {Wallet} from "@coral-xyz/anchor";
+import {Keypair, PublicKey, Transaction, VersionedTransaction} from "@solana/web3.js";
 
 class KeypairWallet implements Wallet {
 
@@ -13,15 +13,23 @@ class KeypairWallet implements Wallet {
         return this.payer.publicKey;
     }
 
-    signAllTransactions(txs: Transaction[]): Promise<Transaction[]> {
+    signAllTransactions<T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> {
         txs.forEach((tx) => {
-            tx.sign(this.payer);
+            if(tx instanceof Transaction) {
+                tx.sign(this.payer);
+            } else if(tx instanceof VersionedTransaction) {
+                tx.sign([this.payer]);
+            }
         });
         return Promise.resolve(txs);
     }
 
-    signTransaction(tx: Transaction): Promise<Transaction> {
-        tx.sign(this.payer);
+    signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T> {
+        if(tx instanceof Transaction) {
+            tx.sign(this.payer);
+        } else if(tx instanceof VersionedTransaction) {
+            tx.sign([this.payer]);
+        }
         return Promise.resolve(tx);
     }
 

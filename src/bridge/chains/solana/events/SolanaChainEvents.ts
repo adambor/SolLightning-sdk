@@ -1,6 +1,6 @@
 import ChainEvents, {EventListener} from "../../../events/ChainEvents";
 import SolanaSwapData from "../swaps/SolanaSwapData";
-import {AnchorProvider, BorshCoder} from "@project-serum/anchor";
+import {AnchorProvider, BorshCoder} from "@coral-xyz/anchor";
 import SolanaClientSwapContract from "../swaps/SolanaClientSwapContract";
 import RefundEvent from "../../../events/types/RefundEvent";
 import ClaimEvent from "../../../events/types/ClaimEvent";

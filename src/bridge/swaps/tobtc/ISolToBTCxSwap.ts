@@ -131,13 +131,10 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
             throw new Error("Expired, please retry");
         }
 
-        const txResult = await this.wrapper.contract.initPayIn(this.data, this.timeout, this.prefix, this.signature, this.nonce);
+        const txResult = await this.wrapper.contract.initPayIn(this.data, this.timeout, this.prefix, this.signature, this.nonce, !noWaitForConfirmation, abortSignal);
 
         if(!noWaitForConfirmation) {
-            this.state = SolToBTCxSwapState.COMMITED;
-            await this.save();
-            this.emitEvent();
-
+            await this.waitTillCommited(abortSignal);
             return txResult;
         }
 
@@ -153,6 +150,10 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
         return new Promise((resolve, reject) => {
             if(abortSignal!=null && abortSignal.aborted) {
                 reject("Aborted");
+                return;
+            }
+            if(this.state===SolToBTCxSwapState.COMMITED) {
+                resolve();
                 return;
             }
             let listener;
@@ -220,13 +221,13 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
 
         let txResult: string;
         if(this.wrapper.contract.isExpired(this.data)) {
-            txResult = await this.wrapper.contract.refund(this.data);
+            txResult = await this.wrapper.contract.refund(this.data, !noWaitForConfirmation, abortSignal);
         } else {
             const res = await this.wrapper.contract.getRefundAuthorization(this.data, this.url);
             if(res.is_paid) {
                 throw new Error("Payment was successful");
             }
-            txResult = await this.wrapper.contract.refundWithAuthorization(this.data, res.timeout, res.prefix, res.signature);
+            txResult = await this.wrapper.contract.refundWithAuthorization(this.data, res.timeout, res.prefix, res.signature, !noWaitForConfirmation, abortSignal);
         }
 
         if(!noWaitForConfirmation) {
@@ -246,6 +247,10 @@ abstract class ISolToBTCxSwap<T extends SwapData> implements ISwap {
         return new Promise((resolve, reject) => {
             if(abortSignal!=null && abortSignal.aborted) {
                 reject("Aborted");
+                return;
+            }
+            if(this.state===SolToBTCxSwapState.REFUNDED) {
+                resolve();
                 return;
             }
             let listener;

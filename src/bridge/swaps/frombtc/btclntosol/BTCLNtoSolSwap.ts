@@ -124,7 +124,7 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
             throw new Error("Request timed out!")
         }
 
-        const txResult = await this.wrapper.contract.init(this.data, this.timeout, this.prefix, this.signature, this.nonce);
+        const txResult = await this.wrapper.contract.init(this.data, this.timeout, this.prefix, this.signature, this.nonce, null, !noWaitForConfirmation, abortSignal);
 
         //Maybe don't wait for TX but instead subscribe to logs, this would improve the experience when user speeds up the transaction by replacing it.
 
@@ -141,11 +141,11 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
             return receipt;
         }*/
 
-        this.state = BTCxtoSolSwapState.CLAIM_COMMITED;
-
-        await this.save();
-
-        this.emitEvent();
+        // this.state = BTCxtoSolSwapState.CLAIM_COMMITED;
+        //
+        // await this.save();
+        //
+        // this.emitEvent();
 
         return txResult;
     }
@@ -159,6 +159,10 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
         return new Promise((resolve, reject) => {
             if(abortSignal!=null && abortSignal.aborted) {
                 reject("Aborted");
+                return;
+            }
+            if(this.state===BTCxtoSolSwapState.CLAIM_COMMITED) {
+                resolve();
                 return;
             }
             let listener;
@@ -195,7 +199,7 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
             throw new Error("Must be in CLAIM_COMMITED state!");
         }
 
-        const txResult = await this.wrapper.contract.claimWithSecret(this.data, this.secret.toString("hex"));
+        const txResult = await this.wrapper.contract.claimWithSecret(this.data, this.secret.toString("hex"), !noWaitForConfirmation, abortSignal);
 
         if(!noWaitForConfirmation) {
             await this.waitTillClaimed(abortSignal);
@@ -210,11 +214,11 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
             return receipt;
         }*/
 
-        this.state = BTCxtoSolSwapState.CLAIM_CLAIMED;
-
-        await this.save();
-
-        this.emitEvent();
+        // this.state = BTCxtoSolSwapState.CLAIM_CLAIMED;
+        //
+        // await this.save();
+        //
+        // this.emitEvent();
 
         return txResult;
     }
@@ -228,6 +232,10 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
         return new Promise((resolve, reject) => {
             if(abortSignal!=null && abortSignal.aborted) {
                 reject("Aborted");
+                return;
+            }
+            if(this.state===BTCxtoSolSwapState.CLAIM_CLAIMED) {
+                resolve();
                 return;
             }
             let listener;
@@ -276,7 +284,7 @@ export default class BTCLNtoSolSwap<T extends SwapData> extends IBTCxtoSolSwap<T
             this.nonce = result.nonce;
         }
 
-        const txResult = await this.wrapper.contract.initAndClaimWithSecret(this.data, this.timeout, this.prefix, this.signature, this.nonce, this.secret.toString("hex"));
+        const txResult = await this.wrapper.contract.initAndClaimWithSecret(this.data, this.timeout, this.prefix, this.signature, this.nonce, this.secret.toString("hex"), true, abortSignal);
 
         await this.waitTillClaimed(abortSignal);
 

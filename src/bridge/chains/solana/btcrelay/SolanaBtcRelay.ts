@@ -1,4 +1,4 @@
-import {AnchorProvider, BorshCoder, EventParser, Program} from "@project-serum/anchor";
+import {AnchorProvider, BorshCoder, EventParser, Program} from "@coral-xyz/anchor";
 import {programIdl} from "./programIdl";
 import {PublicKey, TransactionInstruction} from "@solana/web3.js";
 

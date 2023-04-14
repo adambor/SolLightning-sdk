@@ -2,8 +2,7 @@ import fetch, {Response} from "cross-fetch";
 import * as bitcoin from "bitcoinjs-lib";
 import {ConstantSoltoBTC} from "./Constants";
 import {createHash} from "crypto-browserify";
-import {BN} from "@project-serum/anchor";
-import has = Reflect.has;
+import * as BN from "bn.js";
 
 const url = "https://mempool.space/testnet/api/";
 

@@ -179,7 +179,7 @@ export default class BTCtoSolNewSwap<T extends SwapData> extends IBTCxtoSolSwap<
             throw new Error("Request timed out!")
         }
 
-        const txResult = await this.wrapper.contract.init(this.data, this.timeout, this.prefix, this.signature, this.nonce, this.getTxoHash());
+        const txResult = await this.wrapper.contract.init(this.data, this.timeout, this.prefix, this.signature, this.nonce, this.getTxoHash(), !noWaitForConfirmation, abortSignal);
 
         //Maybe don't wait for TX but instead subscribe to logs, this would improve the experience when user speeds up the transaction by replacing it.
 
@@ -188,11 +188,11 @@ export default class BTCtoSolNewSwap<T extends SwapData> extends IBTCxtoSolSwap<
             return txResult;
         }
 
-        this.state = BTCtoSolNewSwapState.CLAIM_COMMITED;
-
-        await this.save();
-
-        this.emitEvent();
+        // this.state = BTCtoSolNewSwapState.CLAIM_COMMITED;
+        //
+        // await this.save();
+        //
+        // this.emitEvent();
 
         return txResult;
     }
@@ -208,9 +208,13 @@ export default class BTCtoSolNewSwap<T extends SwapData> extends IBTCxtoSolSwap<
                 reject("Aborted");
                 return;
             }
+            if(this.state===BTCtoSolNewSwapState.CLAIM_COMMITED) {
+                resolve();
+                return;
+            }
             let listener;
             listener = (swap) => {
-                if(swap.state===BTCxtoSolSwapState.CLAIM_COMMITED) {
+                if(swap.state===BTCtoSolNewSwapState.CLAIM_COMMITED) {
                     this.events.removeListener("swapState", listener);
                     if(abortSignal!=null) abortSignal.onabort = null;
                     resolve();
@@ -242,7 +246,7 @@ export default class BTCtoSolNewSwap<T extends SwapData> extends IBTCxtoSolSwap<
             throw new Error("Must be in BTC_TX_CONFIRMED state!");
         }
 
-        const txResult = await this.wrapper.contract.claimWithTxData(this.data, this.txId, this.vout, this.secret);
+        const txResult = await this.wrapper.contract.claimWithTxData(this.data, this.txId, this.vout, this.secret, !noWaitForConfirmation, abortSignal);
 
         if(!noWaitForConfirmation) {
             await this.waitTillClaimed(abortSignal);
@@ -277,9 +281,13 @@ export default class BTCtoSolNewSwap<T extends SwapData> extends IBTCxtoSolSwap<
                 reject("Aborted");
                 return;
             }
+            if(this.state===BTCtoSolNewSwapState.CLAIM_CLAIMED) {
+                resolve();
+                return;
+            }
             let listener;
             listener = (swap) => {
-                if(swap.state===BTCxtoSolSwapState.CLAIM_CLAIMED) {
+                if(swap.state===BTCtoSolNewSwapState.CLAIM_CLAIMED) {
                     this.events.removeListener("swapState", listener);
                     if(abortSignal!=null) abortSignal.onabort = null;
                     resolve();

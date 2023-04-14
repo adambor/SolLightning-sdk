@@ -10,7 +10,7 @@ import {
     SYSVAR_RENT_PUBKEY, Transaction,
     TransactionInstruction
 } from "@solana/web3.js";
-import {AnchorProvider, Program} from "@project-serum/anchor";
+import {AnchorProvider, Program} from "@coral-xyz/anchor";
 import SolanaBtcRelay from "../btcrelay/SolanaBtcRelay";
 import SolanaBtcRelaySynchronizer from "../btcrelay/synchronizer/SolanaBtcRelaySynchronizer";
 import {createHash} from "crypto-browserify";
@@ -19,8 +19,7 @@ import {
     getAccount,
     TOKEN_PROGRAM_ID,
     createAssociatedTokenAccountInstruction,
-    createSyncNativeInstruction,
-    createTransferInstruction
+    createSyncNativeInstruction
 } from "@solana/spl-token";
 import {TokenAddress} from "../../../swaps/TokenAddress";
 import * as BN from "bn.js";
@@ -319,7 +318,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         ];
 
         const signatureBuffer = Buffer.from(signature, "hex");
-        const messageBuffer = Buffer.concat(messageBuffers);
+        const messageBuffer = createHash("sha256").update(Buffer.concat(messageBuffers)).digest();
 
         if(!sign.detached.verify(messageBuffer, signatureBuffer, data.intermediary.toBuffer())) {
             throw new SignatureVerificationError("Invalid signature!");
@@ -376,7 +375,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         }
 
         const signatureBuffer = Buffer.from(signature, "hex");
-        const messageBuffer = Buffer.concat(messageBuffers);
+        const messageBuffer = createHash("sha256").update(Buffer.concat(messageBuffers)).digest();
 
         if(!sign.detached.verify(messageBuffer, signatureBuffer, data.intermediary.toBuffer())) {
             throw new SignatureVerificationError("Invalid signature!");
@@ -428,7 +427,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         ];
 
         const signatureBuffer = Buffer.from(signature, "hex");
-        const messageBuffer = Buffer.concat(messageBuffers);
+        const messageBuffer = createHash("sha256").update(Buffer.concat(messageBuffers)).digest();
 
         if(!sign.detached.verify(messageBuffer, signatureBuffer, data.offerer.toBuffer())) {
             throw new SignatureVerificationError("Invalid signature!");
@@ -448,7 +447,7 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const claimerAta = getAssociatedTokenAddressSync(data.token, data.intermediary);
 
         let result = await this.program.methods
-            .offererInitialize(new BN(nonce), data.amount, data.expiry, paymentHash, new BN(data.kind || 0), new BN(data.confirmations || 0), new BN(0), new BN(timeout), signatureBuffer, true, txoHash || Buffer.alloc(32, 0))
+            .offererInitialize(new BN(nonce), data.amount, data.expiry, paymentHash, new BN(data.kind || 0), new BN(data.confirmations || 0), new BN(0), new BN(timeout), true, txoHash || Buffer.alloc(32, 0))
             .accounts({
                 initializer: data.intermediary,
                 offerer: data.offerer,
@@ -517,18 +516,19 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const ata = getAssociatedTokenAddressSync(data.token, data.intermediary);
 
         const claimIx = await this.program.methods
-            .claimerClaimPayOut(secret)
+            .claimerClaim(secret)
             .accounts({
                 signer: data.intermediary,
-                claimer: data.intermediary,
-                claimerReceiveTokenAccount: ata,
-                offerer: data.offerer,
-                initializer: data.intermediary,
                 escrowState: this.getEscrowStateKey(Buffer.from(data.paymentHash, "hex")),
+                ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+
+                claimerReceiveTokenAccount: ata,
                 vault: this.getVaultKey(data.token),
                 vaultAuthority: this.vaultAuthorityKey,
                 tokenProgram: TOKEN_PROGRAM_ID,
-                ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY
+
+                userData: null,
+                data: null
             })
             .instruction();
 
@@ -668,17 +668,20 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
 
         const verifyIx = await this.btcRelay.createVerifyIx(reversedTxId, data.confirmations, merkleProof.pos, reversedMerkleProof, commitedHeader);
         const claimIx = await this.program.methods
-            .claimerClaimPayOutWithExtData()
+            .claimerClaim(Buffer.alloc(0))
             .accounts({
                 signer: data.intermediary,
-                offerer: data.offerer,
-                claimerReceiveTokenAccount: ata,
                 escrowState: this.getEscrowStateKey(Buffer.from(data.paymentHash, "hex")),
+                ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+
+                claimerReceiveTokenAccount: ata,
                 vault: this.getVaultKey(data.token),
-                data: swapDataKey.publicKey,
                 vaultAuthority: this.vaultAuthorityKey,
                 systemProgram: SystemProgram.programId,
-                ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY
+
+                userData: null,
+
+                data: swapDataKey.publicKey,
             })
             .instruction();
 
@@ -705,12 +708,13 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const txResult = await this.provider.connection.sendRawTransaction(signedTx.serialize());
 
         if(waitForConfirmation) {
-            await this.provider.connection.confirmTransaction({
+            const res = await this.provider.connection.confirmTransaction({
                 signature: txResult,
                 blockhash: blockhash,
                 lastValidBlockHeight,
                 abortSignal
             }, "confirmed");
+            if(res.value.err!=null) throw res.value.err;
         }
 
         return txResult;
@@ -728,12 +732,13 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const txResult = await this.provider.connection.sendRawTransaction(signedTx.serialize());
 
         if(waitForConfirmation) {
-            await this.provider.connection.confirmTransaction({
+            const res = await this.provider.connection.confirmTransaction({
                 signature: txResult,
                 blockhash: blockhash,
                 lastValidBlockHeight,
                 abortSignal
             }, "confirmed");
+            if(res.value.err!=null) throw res.value.err;
         }
 
         return txResult;
@@ -776,12 +781,13 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         console.log("Send final tx sig: ", txResult);
 
         if(waitForConfirmation) {
-            await this.provider.connection.confirmTransaction({
+            const res = await this.provider.connection.confirmTransaction({
                 signature: txResult,
                 blockhash: blockhash,
                 lastValidBlockHeight,
                 abortSignal
             }, "confirmed");
+            if(res.value.err!=null) throw res.value.err;
         }
 
         return txResult;
@@ -851,7 +857,6 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
                 new BN(data.kind),
                 new BN(data.confirmations),
                 new BN(timeout),
-                Buffer.from(signature, "hex"),
                 data.nonce,
                 data.payOut,
                 Buffer.alloc(32, 0)
@@ -899,15 +904,20 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const ata = getAssociatedTokenAddressSync(data.token, data.offerer);
 
         let builder = this.program.methods
-            .offererRefundPayOut()
+            .offererRefund(new BN(0))
             .accounts({
                 offerer: data.offerer,
                 initializer: data.offerer,
+                escrowState: this.getEscrowStateKey(Buffer.from(data.paymentHash, "hex")),
+
                 vault: this.getVaultKey(data.token),
                 vaultAuthority: this.vaultAuthorityKey,
                 initializerDepositTokenAccount: ata,
-                escrowState: this.getEscrowStateKey(Buffer.from(data.paymentHash, "hex")),
                 tokenProgram: TOKEN_PROGRAM_ID,
+
+                userData: null,
+
+                ixSysvar: null
             });
 
         if(!data.payOut) {
@@ -945,16 +955,19 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         const ata = getAssociatedTokenAddressSync(data.token, data.offerer);
 
         let builder = this.program.methods
-            .offererRefundWithSignaturePayOut(new BN(timeout), signatureBuffer)
+            .offererRefund(new BN(timeout))
             .accounts({
                 offerer: data.offerer,
                 initializer: data.offerer,
-                claimer: data.intermediary,
+                escrowState: this.getEscrowStateKey(paymentHash),
+
                 vault: this.getVaultKey(data.token),
                 vaultAuthority: this.vaultAuthorityKey,
                 initializerDepositTokenAccount: ata,
-                escrowState: this.getEscrowStateKey(paymentHash),
                 tokenProgram: TOKEN_PROGRAM_ID,
+
+                userData: null,
+
                 ixSysvar: SYSVAR_INSTRUCTIONS_PUBKEY
             });
 
@@ -1009,12 +1022,13 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         });
 
         if(waitForConfirmation) {
-            await this.provider.connection.confirmTransaction({
+            const res = await this.provider.connection.confirmTransaction({
                 signature: txResult,
                 blockhash: blockhash,
                 lastValidBlockHeight,
                 abortSignal
             }, "confirmed");
+            if(res.value.err!=null) throw res.value.err;
         }
 
         return txResult;
@@ -1035,12 +1049,13 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         });
 
         if(waitForConfirmation) {
-            await this.provider.connection.confirmTransaction({
+            const res = await this.provider.connection.confirmTransaction({
                 signature: txResult,
                 blockhash: blockhash,
                 lastValidBlockHeight,
                 abortSignal
             }, "confirmed");
+            if(res.value.err!=null) throw res.value.err;
         }
 
         return txResult;
@@ -1061,12 +1076,13 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         });
 
         if(waitForConfirmation) {
-            await this.provider.connection.confirmTransaction({
+            const res = await this.provider.connection.confirmTransaction({
                 signature: txResult,
                 blockhash: blockhash,
                 lastValidBlockHeight,
                 abortSignal
             }, "confirmed");
+            if(res.value.err!=null) throw res.value.err;
         }
 
         return txResult;
@@ -1092,12 +1108,13 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
 
         console.log("Sent commit transaction: ", txResultCommit);
 
-        await this.provider.connection.confirmTransaction({
+        let res = await this.provider.connection.confirmTransaction({
             signature: txResultCommit,
             blockhash: blockhash,
             lastValidBlockHeight,
             abortSignal
         }, "confirmed");
+        if(res.value.err!=null) throw res.value.err;
 
         console.log("Commit tx confirmed!");
 
@@ -1106,12 +1123,13 @@ class SolanaClientSwapContract extends ClientSwapContract<SolanaSwapData> {
         console.log("Sent claim transaction: ", txResultClaim);
 
         if(waitForConfirmation) {
-            await this.provider.connection.confirmTransaction({
+            res = await this.provider.connection.confirmTransaction({
                 signature: txResultClaim,
                 blockhash: blockhash,
                 lastValidBlockHeight,
                 abortSignal
             }, "confirmed");
+            if(res.value.err!=null) throw res.value.err;
             console.log("Claim tx confirmed!");
             return [txResultCommit, txResultClaim];
         }

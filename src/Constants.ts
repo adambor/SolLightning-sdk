@@ -1,6 +1,6 @@
-import {BN} from "@project-serum/anchor";
 import * as bitcoin from "bitcoinjs-lib";
 import {PublicKey} from "@solana/web3.js";
+import * as BN from "bn.js";
 
 export const ConstantSoltoBTCLN = {
     baseFee: new BN("10"), //Network fee for lightning payment

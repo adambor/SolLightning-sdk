@@ -106,15 +106,15 @@ export class SolanaSwapper {
 
         const swapContract = new SolanaSwapProgram(provider, btcRelay, new LocalStorageManager("solAccounts"));
 
-        const clientSwapContract = new ClientSwapContract<SolanaSwapData>(swapContract, null, options.pricing, {
+        const clientSwapContract = new ClientSwapContract<SolanaSwapData>(swapContract, SolanaSwapData, null, options.pricing, {
             bitcoinNetwork: ConstantBTCtoSol.network
         });
         const chainEvents = new SolanaChainEventsBrowser(provider, swapContract);
 
-        this.soltobtcln = new SoltoBTCLNWrapper(new LocalWrapperStorage("solSwaps-SoltoBTCLN"), clientSwapContract, chainEvents);
-        this.soltobtc = new SoltoBTCWrapper(new LocalWrapperStorage("solSwaps-SoltoBTC"), clientSwapContract, chainEvents);
-        this.btclntosol = new BTCLNtoSolWrapper(new LocalWrapperStorage("solSwaps-BTCLNtoSol"), clientSwapContract, chainEvents);
-        this.btctosol = new BTCtoSolNewWrapper(new LocalWrapperStorage("solSwaps-BTCtoSol"), clientSwapContract, chainEvents, synchronizer);
+        this.soltobtcln = new SoltoBTCLNWrapper<SolanaSwapData>(new LocalWrapperStorage("solSwaps-SoltoBTCLN"), clientSwapContract, chainEvents, SolanaSwapData);
+        this.soltobtc = new SoltoBTCWrapper<SolanaSwapData>(new LocalWrapperStorage("solSwaps-SoltoBTC"), clientSwapContract, chainEvents, SolanaSwapData);
+        this.btclntosol = new BTCLNtoSolWrapper<SolanaSwapData>(new LocalWrapperStorage("solSwaps-BTCLNtoSol"), clientSwapContract, chainEvents, SolanaSwapData);
+        this.btctosol = new BTCtoSolNewWrapper<SolanaSwapData>(new LocalWrapperStorage("solSwaps-BTCtoSol"), clientSwapContract, chainEvents, SolanaSwapData, synchronizer);
 
         this.chainEvents = chainEvents;
         this.swapContract = clientSwapContract;

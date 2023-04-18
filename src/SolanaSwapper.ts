@@ -1,30 +1,30 @@
-import SoltoBTCLNWrapper from "./swaps/tobtc/soltobtcln/SoltoBTCLNWrapper";
-import SoltoBTCWrapper from "./swaps/tobtc/soltobtc/SoltoBTCWrapper";
-import BTCLNtoSolWrapper from "./swaps/frombtc/btclntosol/BTCLNtoSolWrapper";
-import LocalWrapperStorage from "./storage/LocalWrapperStorage";
 import {AnchorProvider, BN, Wallet} from "@coral-xyz/anchor";
-import ISwap from "./swaps/ISwap";
-import ISolToBTCxSwap from "./swaps/tobtc/ISolToBTCxSwap";
-import IBTCxtoSolSwap from "./swaps/frombtc/IBTCxtoSolSwap";
-import SoltoBTCSwap from "./swaps/tobtc/soltobtc/SoltoBTCSwap";
-import SoltoBTCLNSwap from "./swaps/tobtc/soltobtcln/SoltoBTCLNSwap";
-import BTCLNtoSolSwap from "./swaps/frombtc/btclntosol/BTCLNtoSolSwap"
 import * as bitcoin from "bitcoinjs-lib";
 import * as bolt11 from "bolt11";
-import SwapType from "./swaps/SwapType";
-import {Bitcoin, ConstantBTCLNtoSol, ConstantBTCtoSol, ConstantSoltoBTC, ConstantSoltoBTCLN} from "../Constants";
+import {Bitcoin, ConstantBTCLNtoSol, ConstantBTCtoSol, ConstantSoltoBTC, ConstantSoltoBTCLN} from "./Constants";
 import {Connection, Keypair, PublicKey, Signer} from "@solana/web3.js";
-import BTCtoSolNewWrapper from "./swaps/frombtc/btctosolNew/BTCtoSolNewWrapper";
-import BTCtoSolNewSwap from "./swaps/frombtc/btctosolNew/BTCtoSolNewSwap";
-import SolanaSwapData from "./chains/solana/swaps/SolanaSwapData";
-import SolanaClientSwapContract from "./chains/solana/swaps/SolanaClientSwapContract";
-import SolanaChainEvents from "./chains/solana/events/SolanaChainEvents";
-import IntermediaryDiscovery from "./intermediaries/IntermediaryDiscovery";
-import IntermediaryError from "./errors/IntermediaryError";
-import ISwapPrice from "./swaps/ISwapPrice";
-import {TokenAddress} from "./swaps/TokenAddress";
-import CoinGeckoSwapPrice from "./prices/CoinGeckoSwapPrice";
+
 import KeypairWallet from "./wallet/KeypairWallet";
+
+import {SolanaBtcRelay, SolanaSwapData, SolanaSwapProgram} from "crosslightning-solana";
+import {SolanaChainEventsBrowser} from "crosslightning-solana/dist/solana/events/SolanaChainEventsBrowser";
+
+import {
+    ISwapPrice, MempoolBitcoinRpc,
+    BTCLNtoSolWrapper,
+    ClientSwapContract,
+    IntermediaryDiscovery,
+    SoltoBTCLNWrapper,
+    SoltoBTCWrapper,
+    BTCtoSolNewWrapper,
+    MempoolBtcRelaySynchronizer,
+    LocalStorageManager,
+    LocalWrapperStorage,
+    SwapType,
+    SoltoBTCSwap,
+    IntermediaryError, SoltoBTCLNSwap, BTCtoSolNewSwap, BTCLNtoSolSwap, ISwap, ISolToBTCxSwap,
+    IBTCxtoSolSwap
+} from "crosslightning-sdk-base";
 
 type SwapperOptions = {
     intermediaryUrl?: string,
@@ -32,7 +32,7 @@ type SwapperOptions = {
     pricing?: ISwapPrice
 };
 
-export default class SolanaSwapper {
+export class SolanaSwapper {
 
     soltobtcln: SoltoBTCLNWrapper<SolanaSwapData>;
     soltobtc: SoltoBTCWrapper<SolanaSwapData>;
@@ -41,14 +41,15 @@ export default class SolanaSwapper {
 
     private readonly intermediaryUrl: string;
     private readonly intermediaryDiscovery: IntermediaryDiscovery<SolanaSwapData>;
-    private readonly swapContract: SolanaClientSwapContract;
+    private readonly swapContract: ClientSwapContract<SolanaSwapData>;
+    private readonly chainEvents: SolanaChainEventsBrowser;
 
     /**
      * Returns true if string is a valid bitcoin address
      *
      * @param address
      */
-    static isValidBitcoinAddress(address: string): boolean {
+    isValidBitcoinAddress(address: string): boolean {
         try {
             bitcoin.address.toOutputScript(address, ConstantBTCtoSol.network);
             return true;
@@ -62,7 +63,7 @@ export default class SolanaSwapper {
      *
      * @param lnpr
      */
-    static isValidLightningInvoice(lnpr: string): boolean {
+    isValidLightningInvoice(lnpr: string): boolean {
         try {
             const parsed = bolt11.decode(lnpr);
             if(parsed.satoshis!=null) return true;
@@ -99,15 +100,24 @@ export default class SolanaSwapper {
 
         options = options || {};
 
-        const swapContract = new SolanaClientSwapContract(provider, null, options.pricing);
-        const chainEvents = new SolanaChainEvents(provider, swapContract);
+        const bitcoinRpc = new MempoolBitcoinRpc();
+        const btcRelay = new SolanaBtcRelay(provider, bitcoinRpc);
+        const synchronizer = new MempoolBtcRelaySynchronizer(btcRelay, bitcoinRpc);
 
-        this.soltobtcln = new SoltoBTCLNWrapper(new LocalWrapperStorage("solSwaps-SoltoBTCLN"), swapContract, chainEvents);
-        this.soltobtc = new SoltoBTCWrapper(new LocalWrapperStorage("solSwaps-SoltoBTC"), swapContract, chainEvents);
-        this.btclntosol = new BTCLNtoSolWrapper(new LocalWrapperStorage("solSwaps-BTCLNtoSol"), swapContract, chainEvents);
-        this.btctosol = new BTCtoSolNewWrapper(new LocalWrapperStorage("solSwaps-BTCtoSol"), swapContract, chainEvents);
+        const swapContract = new SolanaSwapProgram(provider, btcRelay, new LocalStorageManager("solAccounts"));
 
-        this.swapContract = swapContract;
+        const clientSwapContract = new ClientSwapContract<SolanaSwapData>(swapContract, null, options.pricing, {
+            bitcoinNetwork: ConstantBTCtoSol.network
+        });
+        const chainEvents = new SolanaChainEventsBrowser(provider, swapContract);
+
+        this.soltobtcln = new SoltoBTCLNWrapper(new LocalWrapperStorage("solSwaps-SoltoBTCLN"), clientSwapContract, chainEvents);
+        this.soltobtc = new SoltoBTCWrapper(new LocalWrapperStorage("solSwaps-SoltoBTC"), clientSwapContract, chainEvents);
+        this.btclntosol = new BTCLNtoSolWrapper(new LocalWrapperStorage("solSwaps-BTCLNtoSol"), clientSwapContract, chainEvents);
+        this.btctosol = new BTCtoSolNewWrapper(new LocalWrapperStorage("solSwaps-BTCtoSol"), clientSwapContract, chainEvents, synchronizer);
+
+        this.chainEvents = chainEvents;
+        this.swapContract = clientSwapContract;
 
         if(options.intermediaryUrl!=null) {
             this.intermediaryUrl = options.intermediaryUrl;
@@ -167,9 +177,16 @@ export default class SolanaSwapper {
      * Needs to be called before any other action
      */
     async init() {
+        await this.chainEvents.init();
+        await this.swapContract.init();
+
+        console.log("Initializing Sol -> BTCLN");
         await this.soltobtcln.init();
+        console.log("Initializing Sol -> BTC");
         await this.soltobtc.init();
+        console.log("Initializing BTCLN -> Sol");
         await this.btclntosol.init();
+        console.log("Initializing BTC -> Sol");
         await this.btctosol.init();
 
         if(this.intermediaryDiscovery!=null) {

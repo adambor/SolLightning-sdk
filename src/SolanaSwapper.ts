@@ -137,13 +137,13 @@ export class SolanaSwapper {
             if(max!=null) return new BN(max);
         }
         switch(kind) {
-            case SwapType.BTC_TO_SOL:
+            case SwapType.FROM_BTC:
                 return ConstantBTCtoSol.max;
-            case SwapType.BTCLN_TO_SOL:
+            case SwapType.FROM_BTCLN:
                 return ConstantBTCLNtoSol.max;
-            case SwapType.SOL_TO_BTC:
+            case SwapType.TO_BTC:
                 return ConstantSoltoBTC.max;
-            case SwapType.SOL_TO_BTCLN:
+            case SwapType.TO_BTCLN:
                 return ConstantSoltoBTCLN.max;
         }
         return new BN(0);
@@ -160,13 +160,13 @@ export class SolanaSwapper {
             if(min!=null) return new BN(min);
         }
         switch(kind) {
-            case SwapType.BTC_TO_SOL:
+            case SwapType.FROM_BTC:
                 return ConstantBTCtoSol.min;
-            case SwapType.BTCLN_TO_SOL:
+            case SwapType.FROM_BTCLN:
                 return ConstantBTCLNtoSol.min;
-            case SwapType.SOL_TO_BTC:
+            case SwapType.TO_BTC:
                 return ConstantSoltoBTC.min;
-            case SwapType.SOL_TO_BTCLN:
+            case SwapType.TO_BTCLN:
                 return ConstantSoltoBTCLN.min;
         }
         return new BN(0);
@@ -217,15 +217,15 @@ export class SolanaSwapper {
         if(this.intermediaryUrl!=null) {
             return this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, this.intermediaryUrl+"/tobtc");
         }
-        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.SOL_TO_BTC, amount, tokenAddress);
+        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.TO_BTC, amount, tokenAddress);
         if(candidates.length===0) throw new Error("No intermediary found!");
 
         let swap;
         for(let candidate of candidates) {
             try {
                 swap = await this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, candidate.url+"/tobtc", tokenAddress, candidate.address,
-                    new BN(candidate.services[SwapType.SOL_TO_BTC].swapBaseFee),
-                    new BN(candidate.services[SwapType.SOL_TO_BTC].swapFeePPM));
+                    new BN(candidate.services[SwapType.TO_BTC].swapBaseFee),
+                    new BN(candidate.services[SwapType.TO_BTC].swapFeePPM));
                 break;
             } catch (e) {
                 if(e instanceof IntermediaryError) {
@@ -253,15 +253,15 @@ export class SolanaSwapper {
             return this.soltobtcln.create(paymentRequest, expirySeconds || (3 * 24 * 3600), this.intermediaryUrl + "/tobtcln");
         }
         const parsedPR = bolt11.decode(paymentRequest);
-        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.SOL_TO_BTCLN, new BN(parsedPR.millisatoshis).div(new BN(1000)), tokenAddress);
+        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.TO_BTCLN, new BN(parsedPR.millisatoshis).div(new BN(1000)), tokenAddress);
         if(candidates.length===0) throw new Error("No intermediary found!");
 
         let swap;
         for(let candidate of candidates) {
             try {
                 swap = await this.soltobtcln.create(paymentRequest, expirySeconds || (3*24*3600), candidate.url+"/tobtcln", tokenAddress, candidate.address,
-                    new BN(candidate.services[SwapType.SOL_TO_BTCLN].swapBaseFee),
-                    new BN(candidate.services[SwapType.SOL_TO_BTCLN].swapFeePPM));
+                    new BN(candidate.services[SwapType.TO_BTCLN].swapBaseFee),
+                    new BN(candidate.services[SwapType.TO_BTCLN].swapFeePPM));
                 break;
             } catch (e) {
                 if(e instanceof IntermediaryError) {
@@ -288,15 +288,15 @@ export class SolanaSwapper {
         if(this.intermediaryUrl!=null) {
             return this.btctosol.create(amount, this.intermediaryUrl+"/frombtc");
         }
-        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.BTC_TO_SOL, amount, tokenAddress);
+        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.FROM_BTC, amount, tokenAddress);
         if(candidates.length===0) throw new Error("No intermediary found!");
 
         let swap;
         for(let candidate of candidates) {
             try {
                 swap = await this.btctosol.create(amount, candidate.url+"/frombtc", tokenAddress, candidate.address,
-                    new BN(candidate.services[SwapType.BTC_TO_SOL].swapBaseFee),
-                    new BN(candidate.services[SwapType.BTC_TO_SOL].swapFeePPM));
+                    new BN(candidate.services[SwapType.FROM_BTC].swapBaseFee),
+                    new BN(candidate.services[SwapType.FROM_BTC].swapFeePPM));
                 break;
             } catch (e) {
                 if(e instanceof IntermediaryError) {
@@ -323,7 +323,7 @@ export class SolanaSwapper {
         if(this.intermediaryUrl!=null) {
             return this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), this.intermediaryUrl+"/frombtcln");
         }
-        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.BTCLN_TO_SOL, amount, tokenAddress);
+        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.FROM_BTCLN, amount, tokenAddress);
         if(candidates.length===0) throw new Error("No intermediary found!");
 
 
@@ -331,8 +331,8 @@ export class SolanaSwapper {
         for(let candidate of candidates) {
             try {
                 swap = await this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), candidate.url+"/frombtcln", tokenAddress, candidate.address,
-                    new BN(candidate.services[SwapType.BTCLN_TO_SOL].swapBaseFee),
-                    new BN(candidate.services[SwapType.BTCLN_TO_SOL].swapFeePPM));
+                    new BN(candidate.services[SwapType.FROM_BTCLN].swapBaseFee),
+                    new BN(candidate.services[SwapType.FROM_BTCLN].swapFeePPM));
                 break;
             } catch (e) {
                 if(e instanceof IntermediaryError) {

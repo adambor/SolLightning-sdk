@@ -6,7 +6,7 @@ import {Connection, Keypair, PublicKey, Signer} from "@solana/web3.js";
 
 import KeypairWallet from "./wallet/KeypairWallet";
 
-import {SolanaBtcRelay, SolanaSwapData, SolanaSwapProgram} from "crosslightning-solana";
+import {SolanaBtcRelay, SolanaSwapData, SolanaSwapProgram, StoredDataAccount} from "crosslightning-solana";
 import {SolanaChainEventsBrowser} from "crosslightning-solana/dist/solana/events/SolanaChainEventsBrowser";
 
 import {
@@ -23,13 +23,34 @@ import {
     SwapType,
     SoltoBTCSwap,
     IntermediaryError, SoltoBTCLNSwap, BTCtoSolNewSwap, BTCLNtoSolSwap, ISwap, ISolToBTCxSwap,
-    IBTCxtoSolSwap
+    IBTCxtoSolSwap,
+    ChainUtils,
+    IWrapperStorage
 } from "crosslightning-sdk-base";
+import {SolanaChains} from "./SolanaChains";
+import {BitcoinNetwork} from "./BitcoinNetwork";
+import {IStorageManager} from "crosslightning-base";
 
 type SwapperOptions = {
     intermediaryUrl?: string,
     //wbtcToken?: PublicKey,
-    pricing?: ISwapPrice
+    pricing?: ISwapPrice,
+    registryUrl?: string,
+
+    addresses?: {
+        swapContract: string,
+        btcRelayContract: string
+    },
+    bitcoinNetwork?: BitcoinNetwork,
+
+    storage?: {
+        toBtc?: IWrapperStorage,
+        fromBtc?: IWrapperStorage,
+        toBtcLn?: IWrapperStorage,
+        fromBtcLn?: IWrapperStorage,
+
+        dataAccount?: IStorageManager<StoredDataAccount>
+    }
 };
 
 export class SolanaSwapper {
@@ -43,6 +64,10 @@ export class SolanaSwapper {
     private readonly intermediaryDiscovery: IntermediaryDiscovery<SolanaSwapData>;
     private readonly swapContract: ClientSwapContract<SolanaSwapData>;
     private readonly chainEvents: SolanaChainEventsBrowser;
+
+    private readonly solSwapContract: SolanaSwapProgram;
+
+    private readonly bitcoinNetwork: bitcoin.Network;
 
     /**
      * Returns true if string is a valid bitcoin address
@@ -99,22 +124,40 @@ export class SolanaSwapper {
         }
 
         options = options || {};
+        options.addresses = options.addresses || SolanaChains.DEVNET.addresses;
+
+        this.bitcoinNetwork = ConstantBTCtoSol.network;
+
+        if(options.bitcoinNetwork!=null) switch (options.bitcoinNetwork) {
+            case BitcoinNetwork.MAINNET:
+                this.bitcoinNetwork = bitcoin.networks.bitcoin;
+                ChainUtils.setMempoolUrl("https://mempool.space/api/");
+                break;
+            case BitcoinNetwork.TESTNET:
+                this.bitcoinNetwork = bitcoin.networks.testnet;
+                ChainUtils.setMempoolUrl("https://mempool.space/testnet/api/");
+                break;
+            case BitcoinNetwork.REGTEST:
+                this.bitcoinNetwork = bitcoin.networks.regtest;
+                break;
+        }
 
         const bitcoinRpc = new MempoolBitcoinRpc();
-        const btcRelay = new SolanaBtcRelay(provider, bitcoinRpc);
+        const btcRelay = new SolanaBtcRelay(provider, bitcoinRpc, options.addresses.btcRelayContract);
         const synchronizer = new MempoolBtcRelaySynchronizer(btcRelay, bitcoinRpc);
 
-        const swapContract = new SolanaSwapProgram(provider, btcRelay, new LocalStorageManager("solAccounts"));
+        const swapContract = new SolanaSwapProgram(provider, btcRelay, options.storage?.dataAccount || new LocalStorageManager("solAccounts"), options.addresses.swapContract);
+        this.solSwapContract = swapContract;
 
-        const clientSwapContract = new ClientSwapContract<SolanaSwapData>(swapContract, SolanaSwapData, null, options.pricing, {
-            bitcoinNetwork: ConstantBTCtoSol.network
+        const clientSwapContract = new ClientSwapContract<SolanaSwapData>(swapContract, SolanaSwapData, btcRelay, bitcoinRpc, null, options.pricing, {
+            bitcoinNetwork: this.bitcoinNetwork
         });
         const chainEvents = new SolanaChainEventsBrowser(provider, swapContract);
 
-        this.soltobtcln = new SoltoBTCLNWrapper<SolanaSwapData>(new LocalWrapperStorage("solSwaps-SoltoBTCLN"), clientSwapContract, chainEvents, SolanaSwapData);
-        this.soltobtc = new SoltoBTCWrapper<SolanaSwapData>(new LocalWrapperStorage("solSwaps-SoltoBTC"), clientSwapContract, chainEvents, SolanaSwapData);
-        this.btclntosol = new BTCLNtoSolWrapper<SolanaSwapData>(new LocalWrapperStorage("solSwaps-BTCLNtoSol"), clientSwapContract, chainEvents, SolanaSwapData);
-        this.btctosol = new BTCtoSolNewWrapper<SolanaSwapData>(new LocalWrapperStorage("solSwaps-BTCtoSol"), clientSwapContract, chainEvents, SolanaSwapData, synchronizer);
+        this.soltobtcln = new SoltoBTCLNWrapper<SolanaSwapData>(options.storage?.toBtcLn || new LocalWrapperStorage("solSwaps-SoltoBTCLN"), clientSwapContract, chainEvents, SolanaSwapData);
+        this.soltobtc = new SoltoBTCWrapper<SolanaSwapData>(options.storage?.toBtc || new LocalWrapperStorage("solSwaps-SoltoBTC"), clientSwapContract, chainEvents, SolanaSwapData);
+        this.btclntosol = new BTCLNtoSolWrapper<SolanaSwapData>(options.storage?.fromBtcLn || new LocalWrapperStorage("solSwaps-BTCLNtoSol"), clientSwapContract, chainEvents, SolanaSwapData);
+        this.btctosol = new BTCtoSolNewWrapper<SolanaSwapData>(options.storage?.fromBtc || new LocalWrapperStorage("solSwaps-BTCtoSol"), clientSwapContract, chainEvents, SolanaSwapData, synchronizer);
 
         this.chainEvents = chainEvents;
         this.swapContract = clientSwapContract;
@@ -122,7 +165,7 @@ export class SolanaSwapper {
         if(options.intermediaryUrl!=null) {
             this.intermediaryUrl = options.intermediaryUrl;
         } else {
-            this.intermediaryDiscovery = new IntermediaryDiscovery<SolanaSwapData>(swapContract);
+            this.intermediaryDiscovery = new IntermediaryDiscovery<SolanaSwapData>(swapContract, options.registryUrl);
         }
     }
 
@@ -215,7 +258,7 @@ export class SolanaSwapper {
      */
     async createSolToBTCSwap(tokenAddress: PublicKey, address: string, amount: BN, confirmationTarget?: number, confirmations?: number): Promise<SoltoBTCSwap<SolanaSwapData>> {
         if(this.intermediaryUrl!=null) {
-            return this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, this.intermediaryUrl+"/tobtc");
+            return this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, this.intermediaryUrl+"/tobtc", tokenAddress);
         }
         const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.TO_BTC, amount, tokenAddress);
         if(candidates.length===0) throw new Error("No intermediary found!");
@@ -241,16 +284,55 @@ export class SolanaSwapper {
         return swap;
     }
 
+
+    /**
+     * Creates Solana -> BTC swap with exactly specified input token amount
+     *
+     * @param tokenAddress          Token address to pay with
+     * @param address               Recipient's bitcoin address
+     * @param amount                Amount to send in token base units
+     * @param confirmationTarget    How soon should the transaction be confirmed (determines the fee)
+     * @param confirmations         How many confirmations must the intermediary wait to claim the funds
+     */
+    async createEVMToBTCSwapExactIn(tokenAddress: string, address: string, amount: BN, confirmationTarget?: number, confirmations?: number): Promise<SoltoBTCSwap<SolanaSwapData>> {
+        if(this.intermediaryUrl!=null) {
+            return this.soltobtc.createExactIn(address, amount, confirmationTarget || 3, confirmations || 3, this.intermediaryUrl+"/tobtc", tokenAddress);
+        }
+        const candidates = await this.intermediaryDiscovery.getSwapCandidates(SwapType.TO_BTC, amount, tokenAddress);
+
+        let swap;
+        for(let candidate of candidates) {
+            try {
+                swap = await this.soltobtc.createExactIn(address, amount, confirmationTarget || 3, confirmations || 3, candidate.url+"/tobtc", tokenAddress, candidate.address,
+                    new BN(candidate.services[SwapType.TO_BTC].swapBaseFee),
+                    new BN(candidate.services[SwapType.TO_BTC].swapFeePPM));
+                break;
+            } catch (e) {
+                if(e instanceof IntermediaryError) {
+                    //Blacklist that node
+                    this.intermediaryDiscovery.removeIntermediary(candidate);
+                }
+                console.error(e);
+            }
+        }
+
+        if(swap==null) throw new Error("No intermediary found!");
+
+        return swap;
+    }
+
     /**
      * Creates Solana -> BTCLN swap
      *
      * @param tokenAddress          Token address to pay with
      * @param paymentRequest        BOLT11 lightning network invoice to be paid (needs to have a fixed amount)
      * @param expirySeconds         For how long to lock your funds (higher expiry means higher probability of payment success)
+     * @param maxRoutingBaseFee     Maximum routing fee to use - base fee (higher routing fee means higher probability of payment success)
+     * @param maxRoutingPPM         Maximum routing fee to use - proportional fee in PPM (higher routing fee means higher probability of payment success)
      */
-    async createSolToBTCLNSwap(tokenAddress: PublicKey, paymentRequest: string, expirySeconds?: number): Promise<SoltoBTCLNSwap<SolanaSwapData>> {
+    async createSolToBTCLNSwap(tokenAddress: PublicKey, paymentRequest: string, expirySeconds?: number, maxRoutingBaseFee?: BN, maxRoutingPPM?: BN): Promise<SoltoBTCLNSwap<SolanaSwapData>> {
         if(this.intermediaryUrl!=null) {
-            return this.soltobtcln.create(paymentRequest, expirySeconds || (3 * 24 * 3600), this.intermediaryUrl + "/tobtcln");
+            return this.soltobtcln.create(paymentRequest, expirySeconds || (3 * 24 * 3600), this.intermediaryUrl + "/tobtcln", maxRoutingBaseFee, maxRoutingPPM, tokenAddress);
         }
         const parsedPR = bolt11.decode(paymentRequest);
         const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.TO_BTCLN, new BN(parsedPR.millisatoshis).div(new BN(1000)), tokenAddress);
@@ -259,7 +341,7 @@ export class SolanaSwapper {
         let swap;
         for(let candidate of candidates) {
             try {
-                swap = await this.soltobtcln.create(paymentRequest, expirySeconds || (3*24*3600), candidate.url+"/tobtcln", tokenAddress, candidate.address,
+                swap = await this.soltobtcln.create(paymentRequest, expirySeconds || (3*24*3600), candidate.url+"/tobtcln", maxRoutingBaseFee, maxRoutingPPM, tokenAddress, candidate.address,
                     new BN(candidate.services[SwapType.TO_BTCLN].swapBaseFee),
                     new BN(candidate.services[SwapType.TO_BTCLN].swapFeePPM));
                 break;
@@ -286,7 +368,7 @@ export class SolanaSwapper {
      */
     async createBTCtoSolSwap(tokenAddress: PublicKey, amount: BN): Promise<BTCtoSolNewSwap<SolanaSwapData>> {
         if(this.intermediaryUrl!=null) {
-            return this.btctosol.create(amount, this.intermediaryUrl+"/frombtc");
+            return this.btctosol.create(amount, this.intermediaryUrl+"/frombtc", tokenAddress);
         }
         const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.FROM_BTC, amount, tokenAddress);
         if(candidates.length===0) throw new Error("No intermediary found!");
@@ -321,7 +403,7 @@ export class SolanaSwapper {
      */
     async createBTCLNtoSolSwap(tokenAddress: PublicKey, amount: BN, invoiceExpiry?: number): Promise<BTCLNtoSolSwap<SolanaSwapData>> {
         if(this.intermediaryUrl!=null) {
-            return this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), this.intermediaryUrl+"/frombtcln");
+            return this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), this.intermediaryUrl+"/frombtcln", tokenAddress);
         }
         const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.FROM_BTCLN, amount, tokenAddress);
         if(candidates.length===0) throw new Error("No intermediary found!");

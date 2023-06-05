@@ -76,7 +76,7 @@ export class SolanaSwapper {
      */
     isValidBitcoinAddress(address: string): boolean {
         try {
-            bitcoin.address.toOutputScript(address, ConstantBTCtoSol.network);
+            bitcoin.address.toOutputScript(address, this.bitcoinNetwork);
             return true;
         } catch (e) {
             return false;

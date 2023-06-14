@@ -25,7 +25,9 @@ import {
     IntermediaryError, SoltoBTCLNSwap, BTCtoSolNewSwap, BTCLNtoSolSwap, ISwap, ISolToBTCxSwap,
     IBTCxtoSolSwap,
     ChainUtils,
-    IWrapperStorage
+    IWrapperStorage,
+    LNURLWithdraw,
+    LNURLPay
 } from "crosslightning-sdk-base";
 import {SolanaChains} from "./SolanaChains";
 import {BitcoinNetwork} from "./BitcoinNetwork";
@@ -94,6 +96,24 @@ export class SolanaSwapper {
             if(parsed.satoshis!=null) return true;
         } catch (e) {}
         return false;
+    }
+
+    /**
+     * Returns true if string is a valid LNURL (no checking on type is performed)
+     *
+     * @param lnpr
+     */
+    isValidLNURL(lnurl: string): boolean {
+        return this.swapContract.isLNURL(lnurl);
+    }
+
+    /**
+     * Returns type and data about an LNURL
+     *
+     * @param lnpr
+     */
+    getLNURLTypeAndData(lnurl: string): Promise<LNURLPay | LNURLWithdraw | null> {
+        return this.swapContract.getLNURLType(lnurl);
     }
 
     /**
@@ -294,7 +314,7 @@ export class SolanaSwapper {
      * @param confirmationTarget    How soon should the transaction be confirmed (determines the fee)
      * @param confirmations         How many confirmations must the intermediary wait to claim the funds
      */
-    async createEVMToBTCSwapExactIn(tokenAddress: string, address: string, amount: BN, confirmationTarget?: number, confirmations?: number): Promise<SoltoBTCSwap<SolanaSwapData>> {
+    async createSolToBTCSwapExactIn(tokenAddress: string, address: string, amount: BN, confirmationTarget?: number, confirmations?: number): Promise<SoltoBTCSwap<SolanaSwapData>> {
         if(this.intermediaryUrl!=null) {
             return this.soltobtc.createExactIn(address, amount, confirmationTarget || 3, confirmations || 3, this.intermediaryUrl+"/tobtc", tokenAddress);
         }
@@ -357,7 +377,45 @@ export class SolanaSwapper {
         if(swap==null) throw new Error("No intermediary found!");
 
         return swap;
+    }
 
+    /**
+     * Creates Solana -> BTCLN swap via LNURL-pay
+     *
+     * @param tokenAddress          Token address to pay with
+     * @param lnurlPay              LNURL-pay link to use for the payment
+     * @param amount                Amount to be paid in sats
+     * @param comment               Optional comment for the payment
+     * @param expirySeconds         For how long to lock your funds (higher expiry means higher probability of payment success)
+     * @param maxRoutingBaseFee     Maximum routing fee to use - base fee (higher routing fee means higher probability of payment success)
+     * @param maxRoutingPPM         Maximum routing fee to use - proportional fee in PPM (higher routing fee means higher probability of payment success)
+     */
+    async createSolToBTCLNSwapViaLNURL(tokenAddress: PublicKey, lnurlPay: string, amount: BN, comment: string, expirySeconds?: number, maxRoutingBaseFee?: BN, maxRoutingPPM?: BN): Promise<SoltoBTCLNSwap<SolanaSwapData>> {
+        if(this.intermediaryUrl!=null) {
+            return this.soltobtcln.createViaLNURL(lnurlPay, amount, comment, expirySeconds || (3 * 24 * 3600), this.intermediaryUrl + "/tobtcln", maxRoutingBaseFee, maxRoutingPPM, tokenAddress);
+        }
+        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.TO_BTCLN, amount, tokenAddress);
+        if(candidates.length===0) throw new Error("No intermediary found!");
+
+        let swap;
+        for(let candidate of candidates) {
+            try {
+                swap = await this.soltobtcln.createViaLNURL(lnurlPay, amount, comment, expirySeconds || (3*24*3600), candidate.url+"/tobtcln", maxRoutingBaseFee, maxRoutingPPM, tokenAddress, candidate.address,
+                    new BN(candidate.services[SwapType.TO_BTCLN].swapBaseFee),
+                    new BN(candidate.services[SwapType.TO_BTCLN].swapFeePPM));
+                break;
+            } catch (e) {
+                if(e instanceof IntermediaryError) {
+                    //Blacklist that node
+                    this.intermediaryDiscovery.removeIntermediary(candidate);
+                }
+                console.error(e);
+            }
+        }
+
+        if(swap==null) throw new Error("No intermediary found!");
+
+        return swap;
     }
 
     /**

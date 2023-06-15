@@ -284,6 +284,7 @@ export class SolanaSwapper {
         if(candidates.length===0) throw new Error("No intermediary found!");
 
         let swap;
+        let error;
         for(let candidate of candidates) {
             try {
                 swap = await this.soltobtc.create(address, amount, confirmationTarget || 3, confirmations || 3, candidate.url+"/tobtc", tokenAddress, candidate.address,
@@ -296,10 +297,14 @@ export class SolanaSwapper {
                     this.intermediaryDiscovery.removeIntermediary(candidate);
                 }
                 console.error(e);
+                error = e;
             }
         }
 
-        if(swap==null) throw new Error("No intermediary found!");
+        if(swap==null) {
+            if(error!=null) throw error;
+            throw new Error("No intermediary found!");
+        }
 
         return swap;
     }
@@ -321,6 +326,7 @@ export class SolanaSwapper {
         const candidates = await this.intermediaryDiscovery.getSwapCandidates(SwapType.TO_BTC, amount, tokenAddress);
 
         let swap;
+        let error;
         for(let candidate of candidates) {
             try {
                 swap = await this.soltobtc.createExactIn(address, amount, confirmationTarget || 3, confirmations || 3, candidate.url+"/tobtc", tokenAddress, candidate.address,
@@ -333,10 +339,14 @@ export class SolanaSwapper {
                     this.intermediaryDiscovery.removeIntermediary(candidate);
                 }
                 console.error(e);
+                error = e;
             }
         }
 
-        if(swap==null) throw new Error("No intermediary found!");
+        if(swap==null) {
+            if(error!=null) throw error;
+            throw new Error("No intermediary found!");
+        }
 
         return swap;
     }
@@ -359,6 +369,7 @@ export class SolanaSwapper {
         if(candidates.length===0) throw new Error("No intermediary found!");
 
         let swap;
+        let error;
         for(let candidate of candidates) {
             try {
                 swap = await this.soltobtcln.create(paymentRequest, expirySeconds || (3*24*3600), candidate.url+"/tobtcln", maxRoutingBaseFee, maxRoutingPPM, tokenAddress, candidate.address,
@@ -371,10 +382,14 @@ export class SolanaSwapper {
                     this.intermediaryDiscovery.removeIntermediary(candidate);
                 }
                 console.error(e);
+                error = e;
             }
         }
 
-        if(swap==null) throw new Error("No intermediary found!");
+        if(swap==null) {
+            if(error!=null) throw error;
+            throw new Error("No intermediary found!");
+        }
 
         return swap;
     }
@@ -398,6 +413,7 @@ export class SolanaSwapper {
         if(candidates.length===0) throw new Error("No intermediary found!");
 
         let swap;
+        let error;
         for(let candidate of candidates) {
             try {
                 swap = await this.soltobtcln.createViaLNURL(lnurlPay, amount, comment, expirySeconds || (3*24*3600), candidate.url+"/tobtcln", maxRoutingBaseFee, maxRoutingPPM, tokenAddress, candidate.address,
@@ -410,10 +426,15 @@ export class SolanaSwapper {
                     this.intermediaryDiscovery.removeIntermediary(candidate);
                 }
                 console.error(e);
+                error = e;
             }
         }
 
-        if(swap==null) throw new Error("No intermediary found!");
+        if(swap==null) {
+            if(error!=null) throw error;
+            throw new Error("No intermediary found!");
+        }
+
 
         return swap;
     }
@@ -432,6 +453,7 @@ export class SolanaSwapper {
         if(candidates.length===0) throw new Error("No intermediary found!");
 
         let swap;
+        let error;
         for(let candidate of candidates) {
             try {
                 swap = await this.btctosol.create(amount, candidate.url+"/frombtc", tokenAddress, candidate.address,
@@ -444,10 +466,15 @@ export class SolanaSwapper {
                     this.intermediaryDiscovery.removeIntermediary(candidate);
                 }
                 console.error(e);
+                error = e;
             }
         }
 
-        if(swap==null) throw new Error("No intermediary found!");
+        if(swap==null) {
+            if(error!=null) throw error;
+            throw new Error("No intermediary found!");
+        }
+
 
         return swap;
     }
@@ -468,6 +495,7 @@ export class SolanaSwapper {
 
 
         let swap;
+        let error;
         for(let candidate of candidates) {
             try {
                 swap = await this.btclntosol.create(amount, invoiceExpiry || (1*24*3600), candidate.url+"/frombtcln", tokenAddress, candidate.address,
@@ -479,11 +507,57 @@ export class SolanaSwapper {
                     //Blacklist that node
                     this.intermediaryDiscovery.removeIntermediary(candidate);
                 }
+                error = e;
                 console.error(e);
             }
         }
 
-        if(swap==null) throw new Error("No intermediary found!");
+        if(swap==null) {
+            if(error!=null) throw error;
+            throw new Error("No intermediary found!");
+        }
+
+        return swap;
+    }
+
+    /**
+     * Creates BTCLN -> Solana swap, withdrawing from LNURL-withdraw
+     *
+     * @param lnurl             LNURL-withdraw to pull the funds from
+     * @param tokenAddress      Token address to receive
+     * @param amount            Amount to receive, in satoshis (bitcoin's smallest denomination)
+     * @param invoiceExpiry     Lightning invoice expiry time (in seconds)
+     */
+    async createBTCLNtoSolSwapViaLNURL(lnurl: string, tokenAddress: PublicKey, amount: BN, invoiceExpiry?: number): Promise<BTCLNtoSolSwap<SolanaSwapData>> {
+        if(this.intermediaryUrl!=null) {
+            return this.btclntosol.createViaLNURL(lnurl, amount, invoiceExpiry || (1*24*3600), this.intermediaryUrl+"/frombtcln", tokenAddress);
+        }
+        const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.FROM_BTCLN, amount, tokenAddress);
+        if(candidates.length===0) throw new Error("No intermediary found!");
+
+
+        let swap;
+        let error;
+        for(let candidate of candidates) {
+            try {
+                swap = await this.btclntosol.createViaLNURL(lnurl, amount, invoiceExpiry || (1*24*3600), candidate.url+"/frombtcln", tokenAddress, candidate.address,
+                    new BN(candidate.services[SwapType.FROM_BTCLN].swapBaseFee),
+                    new BN(candidate.services[SwapType.FROM_BTCLN].swapFeePPM));
+                break;
+            } catch (e) {
+                if(e instanceof IntermediaryError) {
+                    //Blacklist that node
+                    this.intermediaryDiscovery.removeIntermediary(candidate);
+                }
+                error = e;
+                console.error(e);
+            }
+        }
+
+        if(swap==null) {
+            if(error!=null) throw error;
+            throw new Error("No intermediary found!");
+        }
 
         return swap;
     }

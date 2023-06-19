@@ -7,7 +7,6 @@ import {Connection, Keypair, PublicKey, Signer} from "@solana/web3.js";
 import KeypairWallet from "./wallet/KeypairWallet";
 
 import {SolanaBtcRelay, SolanaSwapData, SolanaSwapProgram, StoredDataAccount} from "crosslightning-solana";
-import {SolanaChainEventsBrowser} from "crosslightning-solana/dist/solana/events/SolanaChainEventsBrowser";
 
 import {
     ISwapPrice, MempoolBitcoinRpc,
@@ -27,11 +26,13 @@ import {
     ChainUtils,
     IWrapperStorage,
     LNURLWithdraw,
-    LNURLPay
+    LNURLPay,
+    CoinGeckoSwapPrice
 } from "crosslightning-sdk-base";
 import {SolanaChains} from "./SolanaChains";
 import {BitcoinNetwork} from "./BitcoinNetwork";
 import {IStorageManager} from "crosslightning-base";
+import {SolanaChainEventsBrowser} from "crosslightning-solana/dist/solana/events/SolanaChainEventsBrowser";
 
 type SwapperOptions = {
     intermediaryUrl?: string,
@@ -125,6 +126,33 @@ export class SolanaSwapper {
         const parsed = bolt11.decode(lnpr);
         if(parsed.satoshis!=null) return new BN(parsed.satoshis);
         return null;
+    }
+
+    static createSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDifference?: BN) {
+        const coinsMap = CoinGeckoSwapPrice.createCoinsMap(
+            SolanaChains[chain].tokens.WBTC,
+            SolanaChains[chain].tokens.USDC,
+            SolanaChains[chain].tokens.USDT
+        );
+
+        coinsMap[SolanaChains[chain].tokens.WSOL] = {
+            coinId: "solana",
+            decimals: 9
+        };
+
+        return {
+            pricing: new CoinGeckoSwapPrice(
+                maxFeeDifference || new BN(5000),
+                coinsMap
+            ),
+            registryUrl: SolanaChains[chain].registryUrl,
+
+            addresses: {
+                swapContract: SolanaChains[chain].addresses.swapContract,
+                btcRelayContract: SolanaChains[chain].addresses.btcRelayContract
+            },
+            bitcoinNetwork: chain==="MAINNET" ? BitcoinNetwork.MAINNET : BitcoinNetwork.TESTNET,
+        }
     }
 
     constructor(provider: AnchorProvider, options?: SwapperOptions);

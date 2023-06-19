@@ -16,7 +16,7 @@ class KeypairWallet implements Wallet {
     signAllTransactions<T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> {
         txs.forEach((tx) => {
             if(tx instanceof Transaction) {
-                tx.sign(this.payer);
+                tx.partialSign(this.payer);
             } else if(tx instanceof VersionedTransaction) {
                 tx.sign([this.payer]);
             }
@@ -26,7 +26,7 @@ class KeypairWallet implements Wallet {
 
     signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T> {
         if(tx instanceof Transaction) {
-            tx.sign(this.payer);
+            tx.partialSign(this.payer);
         } else if(tx instanceof VersionedTransaction) {
             tx.sign([this.payer]);
         }

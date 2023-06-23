@@ -102,7 +102,7 @@ export class SolanaSwapper {
     /**
      * Returns true if string is a valid LNURL (no checking on type is performed)
      *
-     * @param lnpr
+     * @param lnurl
      */
     isValidLNURL(lnurl: string): boolean {
         return this.swapContract.isLNURL(lnurl);

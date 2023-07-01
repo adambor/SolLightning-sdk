@@ -128,7 +128,7 @@ export class SolanaSwapper {
         return null;
     }
 
-    static createSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDifference?: BN) {
+    static createSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDifference?: BN, intermediaryUrl?: string): SwapperOptions {
         const coinsMap = CoinGeckoSwapPrice.createCoinsMap(
             SolanaChains[chain].tokens.WBTC,
             SolanaChains[chain].tokens.USDC,
@@ -152,6 +152,7 @@ export class SolanaSwapper {
                 btcRelayContract: SolanaChains[chain].addresses.btcRelayContract
             },
             bitcoinNetwork: chain==="MAINNET" ? BitcoinNetwork.MAINNET : BitcoinNetwork.TESTNET,
+            intermediaryUrl: intermediaryUrl
         }
     }
 
@@ -551,12 +552,12 @@ export class SolanaSwapper {
     /**
      * Creates BTCLN -> Solana swap, withdrawing from LNURL-withdraw
      *
-     * @param lnurl             LNURL-withdraw to pull the funds from
      * @param tokenAddress      Token address to receive
+     * @param lnurl             LNURL-withdraw to pull the funds from
      * @param amount            Amount to receive, in satoshis (bitcoin's smallest denomination)
      * @param invoiceExpiry     Lightning invoice expiry time (in seconds)
      */
-    async createBTCLNtoSolSwapViaLNURL(lnurl: string, tokenAddress: PublicKey, amount: BN, invoiceExpiry?: number): Promise<BTCLNtoSolSwap<SolanaSwapData>> {
+    async createBTCLNtoSolSwapViaLNURL(tokenAddress: PublicKey, lnurl: string, amount: BN, invoiceExpiry?: number): Promise<BTCLNtoSolSwap<SolanaSwapData>> {
         if(this.intermediaryUrl!=null) {
             return this.btclntosol.createViaLNURL(lnurl, amount, invoiceExpiry || (1*24*3600), this.intermediaryUrl+"/frombtcln", tokenAddress);
         }

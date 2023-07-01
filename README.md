@@ -225,7 +225,7 @@ try {
 ```
 
 
-#### LNURLs & readable lightning identifiers
+### LNURLs & readable lightning identifiers
 
 LNURLs extend the lightning network functionality by creating static lightning addreses (LNURL-pay & static internet identifiers) and QR codes which allow you to pull funds from them (LNURL-withdraw)
 
@@ -234,7 +234,7 @@ This SDK supports:
  * LNURL-withdraw ([LUD-3](https://github.com/lnurl/luds/blob/luds/03.md))
  * Static internet identifiers ([LUD-16](https://github.com/lnurl/luds/blob/luds/16.md))
 
-##### Differences
+#### Differences
 
 Lightning invoices:
  * One time use only
@@ -250,7 +250,7 @@ LNURLs & lightning identifiers:
  * Possibility to attach a message/comment to a payment
  * Receive a message/url as a result of the payment
  
-##### Helpers
+#### Helpers
 
 It is good practice to automatically distinguish between lightning network invoices & LNURLs and adjust the UI accordingly.
 Therefore there are a few helper functions to help with that:
@@ -279,7 +279,7 @@ if(isLNURL) {
 }
 ```
 
-##### Swap Solana -> Bitcoin lightning network 
+#### Swap Solana -> Bitcoin lightning network 
 ```typescript
 const _useNetwork: ("DEVNET" | "MAINNET") = "DEVNET"; //"DEVNET" or "MAINNET"
 const _useToken: string = SolanaChains[_useNetwork].tokens.USDC; //Token to swap from
@@ -317,7 +317,7 @@ if(!result) {
 }
 ```
 
-##### Swap Bitcoin lightning network -> Solana
+#### Swap Bitcoin lightning network -> Solana
 ```typescript
 const _useNetwork: ("DEVNET" | "MAINNET") = "DEVNET"; //"DEVNET" or "MAINNET"
 const _useToken: string = SolanaChains[_useNetwork].tokens.USDC; //Token to swap from

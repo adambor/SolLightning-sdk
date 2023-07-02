@@ -30,7 +30,7 @@ or
 //Creating a wallet and connection from scratch
 const signer = Keypair.fromSecretKey(_privateKey); //Or Keypair.generate() to generate new one
 const wallet = new Wallet(signer);   
-const connection = new Connection(_solanaRpcUrl, "processed");
+const connection = new Connection(_solanaRpcUrl, "confirmed");
 ```
 
 ### Initialization 
@@ -38,7 +38,7 @@ const connection = new Connection(_solanaRpcUrl, "processed");
 Create AnchorProvider and initialize SolanaSwapper
 ```typescript
 //Create anchor provider
-const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
+const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "confirmed"});
 
 //Defines max swap price difference to the current market price as fetched from CoinGecko API tolerance in PPM (1000000 = 100%)
 const _swapDifferenceTolerance = new BN(2500); //Max allowed difference 0.25%
@@ -61,7 +61,7 @@ await swapper.init();
 Create AnchorProvider and initialize SolanaSwapper
 ```typescript
 //Create anchor provider
-const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
+const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "confirmed"});
 
 //Defines max swap price difference to the current market price as fetched from CoinGecko API tolerance in PPM (1000000 = 100%)
 const _swapDifferenceTolerance = new BN(2500); //Max allowed difference 0.25%
@@ -84,7 +84,7 @@ await swapper.init();
 #### c. Using own intermediary node on DEVNET with custom tokens
 ```typescript
 //Create anchor provider
-const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
+const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "confirmed"});
 
 //Defines max swap price difference to the current market price as fetched from CoinGecko API tolerance in PPM (1000000 = 100%)
 const _swapDifferenceTolerance = new BN(2500); //Max allowed difference 0.25%

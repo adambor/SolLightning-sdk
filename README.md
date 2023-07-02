@@ -4,8 +4,6 @@ An overview of the whole system is available [here](https://github.com/adambor/S
 
 A typescript client for SolLightning bitcoin <-> solana trustlesss cross-chain swaps.
 
-This project is intended to be used in web-browsers and browser-like environments, it uses browser's local storage to store swap data.
-
 **NOTE: This library is still in alpha stage, MAY contain bugs and uncovered edge-cases**
 
 ## Installation
@@ -41,11 +39,20 @@ Create AnchorProvider and initialize SolanaSwapper
 ```typescript
 //Create anchor provider
 const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
+
 //Defines max swap price difference to the current market price as fetched from CoinGecko API tolerance in PPM (1000000 = 100%)
 const _swapDifferenceTolerance = 2500; //Max allowed difference 0.25%
-//Create the swapper instance
+
+//Set swapper options
 const _network = "DEVNET"; //"DEVNET" or "MAINNET"
-const swapper = new SolanaSwapper(anchorProvider, SolanaSwapper.createSwapperOptions(_network, _swapDifferenceTolerance));
+
+//For browser like environment (using browser local storage)
+const _options = createSwapperOptions(_network, _swapDifferenceTolerance);
+//For NodeJS environment (using filesystem storage)
+const _options = createNodeJSSwapperOptions(_network, _swapDifferenceTolerance);
+
+//Create the swapper instance
+const swapper = new SolanaSwapper(anchorProvider, _options);
 //Initialize the swapper
 await swapper.init();
 ```
@@ -55,39 +62,52 @@ Create AnchorProvider and initialize SolanaSwapper
 ```typescript
 //Create anchor provider
 const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
+
 //Defines max swap price difference to the current market price as fetched from CoinGecko API tolerance in PPM (1000000 = 100%)
 const _swapDifferenceTolerance = 2500; //Max allowed difference 0.25%
-//Create the swapper instance
+
+//Set swapper options
 const _network = "MAINNET";
 const _intermediaryUrl = "http://localhost:3000"; //URL of the desired swap intermediary
-const swapper = new SolanaSwapper(anchorProvider, SolanaSwapper.createSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl));
+
+//For browser like environment (using browser local storage)
+const _options = createSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl);
+//For NodeJS environment (using filesystem storage)
+const _options = createNodeJSSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl);
+
+//Create the swapper instance
+const swapper = new SolanaSwapper(anchorProvider, _options);
 //Initialize the swapper
 await swapper.init();
 ```
     
 #### c. Using own intermediary node on DEVNET with custom tokens
-1. Create swap price checker
-    ```typescript
-    //Defines swap token amount differences tolerance in PPM (1000000 = 100%)
-    const _swapDifferenceTolerance = 2500; //Max allowed difference 0.25%
-    //Create swap pricing instance
-    const swapPricing = new CoinGeckoSwapPrice(
-       new BN(_swapDifferenceTolerance),
-       CoinGeckoSwapPrice.createCoinsMap(_wbtcAddress, _usdcAddress, _usdtAddress) //Addresses of created WBTC, USDC and USDT tokens from intermediary instance - see intermediary node's instructions
-    );
-    ```
-2. Create AnchorProvider and initialize swapper
-    ```typescript
-    //Create anchor provider
-    const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
-    //Create the swapper instance
-    const swapper = new SolanaSwapper(anchorProvider, {
-       swapPrice: swapPricing,
-       intermediaryUrl: _intermediaryUrl //URL of the running intermediary node instance
-    });
-    //Initialize the swapper
-    await swapper.init();
-    ```
+```typescript
+//Create anchor provider
+const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
+
+//Defines max swap price difference to the current market price as fetched from CoinGecko API tolerance in PPM (1000000 = 100%)
+const _swapDifferenceTolerance = 2500; //Max allowed difference 0.25%
+
+//Set swapper options
+const _network = "DEVNET";
+const _intermediaryUrl = "http://localhost:3000"; //URL of the desired swap intermediary
+const _tokenAddresses = {
+    WBTC: _wbtcAddress,
+    USDC: _usdcAddress,
+    USDT: _usdtAddress
+}
+
+//For browser like environment (using browser local storage)
+const _options = createSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl, _tokenAddresses);
+//For NodeJS environment (using filesystem storage)
+const _options = createNodeJSSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl, _tokenAddresses);
+
+//Create the swapper instance
+const swapper = new SolanaSwapper(anchorProvider, _options);
+//Initialize the swapper
+await swapper.init();
+```
 
 ### Bitcoin on-chain swaps
 

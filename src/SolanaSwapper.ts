@@ -34,7 +34,7 @@ import {BitcoinNetwork} from "./BitcoinNetwork";
 import {IStorageManager} from "crosslightning-base";
 import {SolanaChainEventsBrowser} from "crosslightning-solana/dist/solana/events/SolanaChainEventsBrowser";
 
-type SwapperOptions = {
+export type SwapperOptions = {
     intermediaryUrl?: string,
     //wbtcToken?: PublicKey,
     pricing?: ISwapPrice,
@@ -54,6 +54,35 @@ type SwapperOptions = {
 
         dataAccount?: IStorageManager<StoredDataAccount>
     }
+};
+
+export function createSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDifference?: BN, intermediaryUrl?: string, tokenAddresses?: {WBTC: string, USDC: string, USDT: string}): SwapperOptions {
+    const coinsMap = CoinGeckoSwapPrice.createCoinsMap(
+        SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
+        SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
+        SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
+    );
+
+    coinsMap[SolanaChains[chain].tokens.WSOL] = {
+        coinId: "solana",
+        decimals: 9
+    };
+
+    return {
+        pricing: new CoinGeckoSwapPrice(
+            maxFeeDifference || new BN(5000),
+            coinsMap
+        ),
+        registryUrl: SolanaChains[chain].registryUrl,
+
+        addresses: {
+            swapContract: SolanaChains[chain].addresses.swapContract,
+            btcRelayContract: SolanaChains[chain].addresses.btcRelayContract
+        },
+        bitcoinNetwork: chain==="MAINNET" ? BitcoinNetwork.MAINNET : BitcoinNetwork.TESTNET,
+        intermediaryUrl: intermediaryUrl
+    };
+
 };
 
 export class SolanaSwapper {
@@ -126,34 +155,6 @@ export class SolanaSwapper {
         const parsed = bolt11.decode(lnpr);
         if(parsed.satoshis!=null) return new BN(parsed.satoshis);
         return null;
-    }
-
-    static createSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDifference?: BN, intermediaryUrl?: string): SwapperOptions {
-        const coinsMap = CoinGeckoSwapPrice.createCoinsMap(
-            SolanaChains[chain].tokens.WBTC,
-            SolanaChains[chain].tokens.USDC,
-            SolanaChains[chain].tokens.USDT
-        );
-
-        coinsMap[SolanaChains[chain].tokens.WSOL] = {
-            coinId: "solana",
-            decimals: 9
-        };
-
-        return {
-            pricing: new CoinGeckoSwapPrice(
-                maxFeeDifference || new BN(5000),
-                coinsMap
-            ),
-            registryUrl: SolanaChains[chain].registryUrl,
-
-            addresses: {
-                swapContract: SolanaChains[chain].addresses.swapContract,
-                btcRelayContract: SolanaChains[chain].addresses.btcRelayContract
-            },
-            bitcoinNetwork: chain==="MAINNET" ? BitcoinNetwork.MAINNET : BitcoinNetwork.TESTNET,
-            intermediaryUrl: intermediaryUrl
-        }
     }
 
     constructor(provider: AnchorProvider, options?: SwapperOptions);
@@ -563,7 +564,6 @@ export class SolanaSwapper {
         }
         const candidates = this.intermediaryDiscovery.getSwapCandidates(SwapType.FROM_BTCLN, amount, tokenAddress);
         if(candidates.length===0) throw new Error("No intermediary found!");
-
 
         let swap;
         let error;

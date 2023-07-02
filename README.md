@@ -41,7 +41,7 @@ Create AnchorProvider and initialize SolanaSwapper
 const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
 
 //Defines max swap price difference to the current market price as fetched from CoinGecko API tolerance in PPM (1000000 = 100%)
-const _swapDifferenceTolerance = 2500; //Max allowed difference 0.25%
+const _swapDifferenceTolerance = new BN(2500); //Max allowed difference 0.25%
 
 //Set swapper options
 const _network = "DEVNET"; //"DEVNET" or "MAINNET"
@@ -64,7 +64,7 @@ Create AnchorProvider and initialize SolanaSwapper
 const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
 
 //Defines max swap price difference to the current market price as fetched from CoinGecko API tolerance in PPM (1000000 = 100%)
-const _swapDifferenceTolerance = 2500; //Max allowed difference 0.25%
+const _swapDifferenceTolerance = new BN(2500); //Max allowed difference 0.25%
 
 //Set swapper options
 const _network = "MAINNET";
@@ -87,7 +87,7 @@ await swapper.init();
 const anchorProvider = new AnchorProvider(connection, wallet, {preflightCommitment: "processed"});
 
 //Defines max swap price difference to the current market price as fetched from CoinGecko API tolerance in PPM (1000000 = 100%)
-const _swapDifferenceTolerance = 2500; //Max allowed difference 0.25%
+const _swapDifferenceTolerance = new BN(2500); //Max allowed difference 0.25%
 
 //Set swapper options
 const _network = "DEVNET";

@@ -49,7 +49,7 @@ const _network = "DEVNET"; //"DEVNET" or "MAINNET"
 //For browser like environment (using browser local storage)
 const _options = createSwapperOptions(_network, _swapDifferenceTolerance);
 //For NodeJS environment (using filesystem storage)
-const _options = createNodeJSSwapperOptions(_network, _swapDifferenceTolerance);
+const _options = createNodeJSSwapperOptions(_network, _swapDifferenceTolerance); //import from "sollightning-sdk/dist/NodeJSSwapperOptions"
 
 //Create the swapper instance
 const swapper = new SolanaSwapper(anchorProvider, _options);
@@ -73,7 +73,7 @@ const _intermediaryUrl = "http://localhost:3000"; //URL of the desired swap inte
 //For browser like environment (using browser local storage)
 const _options = createSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl);
 //For NodeJS environment (using filesystem storage)
-const _options = createNodeJSSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl);
+const _options = createNodeJSSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl); //import from "sollightning-sdk/dist/NodeJSSwapperOptions"
 
 //Create the swapper instance
 const swapper = new SolanaSwapper(anchorProvider, _options);
@@ -101,7 +101,7 @@ const _tokenAddresses = {
 //For browser like environment (using browser local storage)
 const _options = createSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl, _tokenAddresses);
 //For NodeJS environment (using filesystem storage)
-const _options = createNodeJSSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl, _tokenAddresses);
+const _options = createNodeJSSwapperOptions(_network, _swapDifferenceTolerance, _intermediaryUrl, _tokenAddresses); //import from "sollightning-sdk/dist/NodeJSSwapperOptions"
 
 //Create the swapper instance
 const swapper = new SolanaSwapper(anchorProvider, _options);

@@ -4,6 +4,7 @@ import {BitcoinNetwork} from "./BitcoinNetwork";
 import {CoinGeckoSwapPrice} from "crosslightning-sdk-base";
 import {SwapperOptions} from "./SolanaSwapper";
 import {FileSystemStorageManager, FileSystemWrapperStorage} from "crosslightning-sdk-base/dist/fs-storage";
+import * as fs from "fs";
 
 export function createNodeJSSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDifference?: BN, intermediaryUrl?: string, tokenAddresses?: {WBTC: string, USDC: string, USDT: string}): SwapperOptions {
     const coinsMap = CoinGeckoSwapPrice.createCoinsMap(
@@ -31,6 +32,12 @@ export function createNodeJSSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDi
         bitcoinNetwork: chain==="MAINNET" ? BitcoinNetwork.MAINNET : BitcoinNetwork.TESTNET,
         intermediaryUrl: intermediaryUrl
     };
+
+    try {
+        fs.mkdirSync("storage");
+    } catch (e) {}
+
+    returnObj.storage = {};
 
     returnObj.storage.dataAccount = new FileSystemStorageManager("storage/data");
     returnObj.storage.fromBtc = new FileSystemWrapperStorage("storage/fromBtc");

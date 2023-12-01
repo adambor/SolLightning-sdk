@@ -1,26 +1,35 @@
 import {BN} from "@coral-xyz/anchor";
 import {SolanaChains} from "./SolanaChains";
-import {BitcoinNetwork, CoinGeckoSwapPrice} from "crosslightning-sdk-base";
+import {BinanceSwapPrice, BitcoinNetwork, CoinGeckoSwapPrice} from "crosslightning-sdk-base";
 import {SolanaSwapperOptions} from "./SolanaSwapper";
 import {FileSystemStorageManager, FileSystemWrapperStorage} from "crosslightning-sdk-base/dist/fs-storage";
 import * as fs from "fs";
 
-export function createNodeJSSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDifference?: BN, intermediaryUrl?: string, tokenAddresses?: {WBTC: string, USDC: string, USDT: string}): SolanaSwapperOptions {
-    const coinsMap = CoinGeckoSwapPrice.createCoinsMap(
+export function createNodeJSSwapperOptions(
+    chain: "DEVNET" | "MAINNET",
+    maxFeeDifference?: BN,
+    intermediaryUrl?: string,
+    tokenAddresses?: {WBTC: string, USDC: string, USDT: string},
+    httpTimeouts?: {getTimeout?: number, postTimeout?: number}
+): SolanaSwapperOptions {
+    const coinsMap = BinanceSwapPrice.createCoinsMap(
         SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
         SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
         SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
     );
 
     coinsMap[SolanaChains[chain].tokens.WSOL] = {
-        coinId: "solana",
-        decimals: 9
+        pair: "SOLBTC",
+        decimals: 9,
+        invert: false
     };
 
     const returnObj: SolanaSwapperOptions =  {
-        pricing: new CoinGeckoSwapPrice(
+        pricing: new BinanceSwapPrice(
             maxFeeDifference || new BN(5000),
-            coinsMap
+            coinsMap,
+            null,
+            httpTimeouts?.getTimeout
         ),
         registryUrl: SolanaChains[chain].registryUrl,
 
@@ -29,7 +38,10 @@ export function createNodeJSSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDi
             btcRelayContract: SolanaChains[chain].addresses.btcRelayContract
         },
         bitcoinNetwork: chain==="MAINNET" ? BitcoinNetwork.MAINNET : BitcoinNetwork.TESTNET,
-        intermediaryUrl: intermediaryUrl
+        intermediaryUrl: intermediaryUrl,
+
+        getRequestTimeout: httpTimeouts?.getTimeout,
+        postRequestTimeout: httpTimeouts?.postTimeout
     };
 
     try {

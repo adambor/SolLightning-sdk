@@ -6,6 +6,7 @@ import KeypairWallet from "./wallet/KeypairWallet";
 import {SolanaBtcRelay, SolanaSwapData, SolanaSwapProgram, StoredDataAccount} from "crosslightning-solana";
 
 import {
+    BinanceSwapPrice,
     CoinGeckoSwapPrice,
     LocalStorageManager,
     MempoolBitcoinRpc,
@@ -23,22 +24,31 @@ export type SolanaSwapperOptions = SwapperOptions & {
     }
 };
 
-export function createSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDifference?: BN, intermediaryUrl?: string, tokenAddresses?: {WBTC: string, USDC: string, USDT: string}): SwapperOptions {
-    const coinsMap = CoinGeckoSwapPrice.createCoinsMap(
+export function createSwapperOptions(
+    chain: "DEVNET" | "MAINNET",
+    maxFeeDifference?: BN,
+    intermediaryUrl?: string,
+    tokenAddresses?: {WBTC: string, USDC: string, USDT: string},
+    httpTimeouts?: {getTimeout?: number, postTimeout?: number}
+): SwapperOptions {
+    const coinsMap = BinanceSwapPrice.createCoinsMap(
         SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
         SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
         SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
     );
 
     coinsMap[SolanaChains[chain].tokens.WSOL] = {
-        coinId: "solana",
-        decimals: 9
+        pair: "SOLBTC",
+        decimals: 9,
+        invert: false
     };
 
     return {
-        pricing: new CoinGeckoSwapPrice(
+        pricing: new BinanceSwapPrice(
             maxFeeDifference || new BN(5000),
-            coinsMap
+            coinsMap,
+            null,
+            httpTimeouts?.getTimeout
         ),
         registryUrl: SolanaChains[chain].registryUrl,
 
@@ -47,7 +57,10 @@ export function createSwapperOptions(chain: "DEVNET" | "MAINNET", maxFeeDifferen
             btcRelayContract: SolanaChains[chain].addresses.btcRelayContract
         },
         bitcoinNetwork: chain==="MAINNET" ? BitcoinNetwork.MAINNET : BitcoinNetwork.TESTNET,
-        intermediaryUrl: intermediaryUrl
+        intermediaryUrl: intermediaryUrl,
+
+        getRequestTimeout: httpTimeouts?.getTimeout,
+        postRequestTimeout: httpTimeouts?.postTimeout,
     };
 
 };

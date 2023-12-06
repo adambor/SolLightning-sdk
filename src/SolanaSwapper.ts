@@ -45,7 +45,7 @@ export function createSwapperOptions(
 
     return {
         pricing: new BinanceSwapPrice(
-            maxFeeDifference || new BN(5000),
+            maxFeeDifference || new BN(10000),
             coinsMap,
             null,
             httpTimeouts?.getTimeout

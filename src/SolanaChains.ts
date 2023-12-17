@@ -3,7 +3,7 @@ export const SolanaChains = {
     DEVNET: {
         addresses: {
             swapContract: "8vowxbBrrfDU6Dz1bBCL4W9K5pTwsBLVAd8kJPsgLiLR",
-            btcRelayContract: "De2dsY5K3DXBDNzKUjE6KguVP5JUhveKNpMVRmRkazff"
+            btcRelayContract: "8DMFpUfCk8KPkNLtE25XHuCSsT1GqYxuLdGzu59QK3Rt"
         },
         tokens: {
             WBTC: "4Jar76rqMxBfLDLa1syMd7i4R2YhGSkz2EYiAFyNVxja",

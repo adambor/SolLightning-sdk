@@ -10,6 +10,7 @@ import {
     CoinGeckoSwapPrice,
     LocalStorageManager,
     MempoolBitcoinRpc,
+    OKXSwapPrice,
     Swapper,
     SwapperOptions
 } from "crosslightning-sdk-base";
@@ -31,20 +32,20 @@ export function createSwapperOptions(
     tokenAddresses?: {WBTC: string, USDC: string, USDT: string},
     httpTimeouts?: {getTimeout?: number, postTimeout?: number}
 ): SwapperOptions {
-    const coinsMap = BinanceSwapPrice.createCoinsMap(
+    const coinsMap = OKXSwapPrice.createCoinsMap(
         SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
         SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
         SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
     );
 
     coinsMap[SolanaChains[chain].tokens.WSOL] = {
-        pair: "SOLBTC",
+        pair: "SOL-BTC",
         decimals: 9,
         invert: false
     };
 
     return {
-        pricing: new BinanceSwapPrice(
+        pricing: new OKXSwapPrice(
             maxFeeDifference || new BN(10000),
             coinsMap,
             null,
@@ -98,6 +99,6 @@ export class SolanaSwapper extends Swapper<
 
         options.bitcoinNetwork = options.bitcoinNetwork==null ? BitcoinNetwork.TESTNET : options.bitcoinNetwork;
 
-        super(btcRelay, bitcoinRpc, swapContract, chainEvents, SolanaSwapData, options, "SOL-"+options.bitcoinNetwork+"-");
+        super(btcRelay, bitcoinRpc, swapContract, chainEvents, SolanaSwapData, options, "SOLv4-"+options.bitcoinNetwork+"-");
     }
 }

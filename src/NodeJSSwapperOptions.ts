@@ -1,6 +1,6 @@
 import {BN} from "@coral-xyz/anchor";
 import {SolanaChains} from "./SolanaChains";
-import {BinanceSwapPrice, BitcoinNetwork, CoinGeckoSwapPrice} from "crosslightning-sdk-base";
+import {BinanceSwapPrice, BitcoinNetwork, CoinGeckoSwapPrice, OKXSwapPrice} from "crosslightning-sdk-base";
 import {SolanaSwapperOptions} from "./SolanaSwapper";
 import {FileSystemStorageManager, FileSystemWrapperStorage} from "crosslightning-sdk-base/dist/fs-storage";
 import * as fs from "fs";
@@ -12,20 +12,20 @@ export function createNodeJSSwapperOptions(
     tokenAddresses?: {WBTC: string, USDC: string, USDT: string},
     httpTimeouts?: {getTimeout?: number, postTimeout?: number}
 ): SolanaSwapperOptions {
-    const coinsMap = BinanceSwapPrice.createCoinsMap(
+    const coinsMap = OKXSwapPrice.createCoinsMap(
         SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
         SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
         SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
     );
 
     coinsMap[SolanaChains[chain].tokens.WSOL] = {
-        pair: "SOLBTC",
+        pair: "SOL-BTC",
         decimals: 9,
         invert: false
     };
 
     const returnObj: SolanaSwapperOptions =  {
-        pricing: new BinanceSwapPrice(
+        pricing: new OKXSwapPrice(
             maxFeeDifference || new BN(5000),
             coinsMap,
             null,

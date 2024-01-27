@@ -2,8 +2,8 @@
 export const SolanaChains = {
     DEVNET: {
         addresses: {
-            swapContract: "8vowxbBrrfDU6Dz1bBCL4W9K5pTwsBLVAd8kJPsgLiLR",
-            btcRelayContract: "8DMFpUfCk8KPkNLtE25XHuCSsT1GqYxuLdGzu59QK3Rt"
+            swapContract: "4hfUykhqmD7ZRvNh1HuzVKEY7ToENixtdUKZspNDCrEM",
+            btcRelayContract: "3KHSHFpEK6bsjg3bqcxQ9qssJYtRCMi2S9TYVe4q6CQc"
         },
         tokens: {
             WBTC: "4Jar76rqMxBfLDLa1syMd7i4R2YhGSkz2EYiAFyNVxja",
@@ -15,8 +15,8 @@ export const SolanaChains = {
     },
     MAINNET: {
         addresses: {
-            swapContract: "8vowxbBrrfDU6Dz1bBCL4W9K5pTwsBLVAd8kJPsgLiLR",
-            btcRelayContract: "De2dsY5K3DXBDNzKUjE6KguVP5JUhveKNpMVRmRkazff"
+            swapContract: "4hfUykhqmD7ZRvNh1HuzVKEY7ToENixtdUKZspNDCrEM",
+            btcRelayContract: "3KHSHFpEK6bsjg3bqcxQ9qssJYtRCMi2S9TYVe4q6CQc"
         },
         tokens: {
             WBTC: "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh",

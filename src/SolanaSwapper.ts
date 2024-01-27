@@ -6,11 +6,14 @@ import KeypairWallet from "./wallet/KeypairWallet";
 import {SolanaBtcRelay, SolanaSwapData, SolanaSwapProgram, StoredDataAccount} from "crosslightning-solana";
 
 import {
+    BinancePriceProvider,
     BinanceSwapPrice,
     CoinGeckoSwapPrice,
     LocalStorageManager,
     MempoolBitcoinRpc,
+    OKXPriceProvider,
     OKXSwapPrice,
+    RedundantSwapPrice,
     Swapper,
     SwapperOptions
 } from "crosslightning-sdk-base";
@@ -32,24 +35,50 @@ export function createSwapperOptions(
     tokenAddresses?: {WBTC: string, USDC: string, USDT: string},
     httpTimeouts?: {getTimeout?: number, postTimeout?: number}
 ): SwapperOptions {
-    const coinsMap = OKXSwapPrice.createCoinsMap(
+    const coinsMapOKX = OKXSwapPrice.createCoinsMap(
         SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
         SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
         SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
     );
-
-    coinsMap[SolanaChains[chain].tokens.WSOL] = {
+    coinsMapOKX[SolanaChains[chain].tokens.WSOL] = {
         pair: "SOL-BTC",
         decimals: 9,
         invert: false
     };
+    const okx = new OKXPriceProvider(
+        coinsMapOKX,
+        null,
+        httpTimeouts?.getTimeout
+    );
+
+    const coinsMapBinance = BinanceSwapPrice.createCoinsMap(
+        SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
+        SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
+        SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
+    );
+    coinsMapBinance[SolanaChains[chain].tokens.WSOL] = {
+        pair: "SOLBTC",
+        decimals: 9,
+        invert: false
+    };
+    const binance = new BinancePriceProvider(
+        coinsMapBinance,
+        null,
+        httpTimeouts?.getTimeout
+    );
+
+    const coinMapSwaps = RedundantSwapPrice.createCoinsMap(
+        SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
+        SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
+        SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
+    );
+    coinMapSwaps[SolanaChains[chain].tokens.WSOL] = 9;
 
     return {
-        pricing: new OKXSwapPrice(
+        pricing: new RedundantSwapPrice(
             maxFeeDifference || new BN(10000),
-            coinsMap,
-            null,
-            httpTimeouts?.getTimeout
+            coinMapSwaps,
+            [okx, binance]
         ),
         registryUrl: SolanaChains[chain].registryUrl,
 

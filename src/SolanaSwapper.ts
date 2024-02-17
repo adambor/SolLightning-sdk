@@ -35,50 +35,52 @@ export function createSwapperOptions(
     tokenAddresses?: {WBTC: string, USDC: string, USDT: string},
     httpTimeouts?: {getTimeout?: number, postTimeout?: number}
 ): SwapperOptions {
-    const coinsMapOKX = OKXSwapPrice.createCoinsMap(
-        SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
-        SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
-        SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
-    );
-    coinsMapOKX[SolanaChains[chain].tokens.WSOL] = {
-        pair: "SOL-BTC",
-        decimals: 9,
-        invert: false
-    };
-    const okx = new OKXPriceProvider(
-        coinsMapOKX,
-        null,
-        httpTimeouts?.getTimeout
-    );
-
-    const coinsMapBinance = BinanceSwapPrice.createCoinsMap(
-        SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
-        SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
-        SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
-    );
-    coinsMapBinance[SolanaChains[chain].tokens.WSOL] = {
-        pair: "SOLBTC",
-        decimals: 9,
-        invert: false
-    };
-    const binance = new BinancePriceProvider(
-        coinsMapBinance,
-        null,
-        httpTimeouts?.getTimeout
-    );
-
-    const coinMapSwaps = RedundantSwapPrice.createCoinsMap(
-        SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
-        SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
-        SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
-    );
-    coinMapSwaps[SolanaChains[chain].tokens.WSOL] = 9;
+    // const coinsMapOKX = OKXSwapPrice.createCoinsMap(
+    //     SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
+    //     SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
+    //     SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
+    // );
+    // coinsMapOKX[SolanaChains[chain].tokens.WSOL] = {
+    //     pair: "SOL-BTC",
+    //     decimals: 9,
+    //     invert: false
+    // };
+    // const okx = new OKXPriceProvider(
+    //     coinsMapOKX,
+    //     null,
+    //     httpTimeouts?.getTimeout
+    // );
+    //
+    // const coinsMapBinance = BinanceSwapPrice.createCoinsMap(
+    //     SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
+    //     SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
+    //     SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
+    // );
+    // coinsMapBinance[SolanaChains[chain].tokens.WSOL] = {
+    //     pair: "SOLBTC",
+    //     decimals: 9,
+    //     invert: false
+    // };
+    // const binance = new BinancePriceProvider(
+    //     coinsMapBinance,
+    //     null,
+    //     httpTimeouts?.getTimeout
+    // );
+    //
+    // const coinMapSwaps = RedundantSwapPrice.createCoinsMap(
+    //     SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
+    //     SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
+    //     SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
+    // );
+    // coinMapSwaps[SolanaChains[chain].tokens.WSOL] = 9;
 
     return {
-        pricing: new RedundantSwapPrice(
+        pricing: RedundantSwapPrice.create(
             maxFeeDifference || new BN(10000),
-            coinMapSwaps,
-            [okx, binance]
+            httpTimeouts?.getTimeout,
+            SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
+            SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
+            SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
         ),
         registryUrl: SolanaChains[chain].registryUrl,
 

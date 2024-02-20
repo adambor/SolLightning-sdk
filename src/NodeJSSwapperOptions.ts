@@ -70,7 +70,8 @@ export function createNodeJSSwapperOptions(
         intermediaryUrl: intermediaryUrl,
 
         getRequestTimeout: httpTimeouts?.getTimeout,
-        postRequestTimeout: httpTimeouts?.postTimeout
+        postRequestTimeout: httpTimeouts?.postTimeout,
+        defaultTrustedIntermediaryUrl: SolanaChains[chain].trustedSwapForGasUrl
     };
 
     try {

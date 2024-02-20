@@ -11,7 +11,8 @@ export const SolanaChains = {
             USDT: "Ar5yfeSyDNDHyq1GvtcrDKjNcoVTQiv7JaVvuMDbGNDT",
             WSOL: "So11111111111111111111111111111111111111112"
         },
-        registryUrl: "https://api.github.com/repos/adambor/SolLightning-registry/contents/registry.json?ref=main"
+        registryUrl: "https://api.github.com/repos/adambor/SolLightning-registry/contents/registry.json?ref=main",
+        trustedSwapForGasUrl: "https://node3.gethopa.com:24100"
     },
     MAINNET: {
         addresses: {
@@ -24,6 +25,7 @@ export const SolanaChains = {
             USDT: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
             WSOL: "So11111111111111111111111111111111111111112"
         },
-        registryUrl: "https://api.github.com/repos/adambor/SolLightning-registry/contents/registry-mainnet.json?ref=main"
+        registryUrl: "https://api.github.com/repos/adambor/SolLightning-registry/contents/registry-mainnet.json?ref=main",
+        trustedSwapForGasUrl: "https://node3.gethopa.com:34100"
     }
 };

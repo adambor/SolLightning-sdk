@@ -22,7 +22,7 @@ import {IStorageManager} from "crosslightning-base";
 import {SolanaChainEventsBrowser} from "crosslightning-solana/dist/solana/events/SolanaChainEventsBrowser";
 import {BitcoinNetwork} from "crosslightning-sdk-base/dist/btc/BitcoinNetwork";
 
-export type SolanaSwapperOptions = SwapperOptions & {
+export type SolanaSwapperOptions = SwapperOptions<SolanaSwapData> & {
     storage?: {
         dataAccount?: IStorageManager<StoredDataAccount>
     }
@@ -34,7 +34,7 @@ export function createSwapperOptions(
     intermediaryUrl?: string,
     tokenAddresses?: {WBTC: string, USDC: string, USDT: string},
     httpTimeouts?: {getTimeout?: number, postTimeout?: number}
-): SwapperOptions {
+): SwapperOptions<SolanaSwapData> {
     // const coinsMapOKX = OKXSwapPrice.createCoinsMap(
     //     SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
     //     SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
@@ -93,6 +93,7 @@ export function createSwapperOptions(
 
         getRequestTimeout: httpTimeouts?.getTimeout,
         postRequestTimeout: httpTimeouts?.postTimeout,
+        defaultTrustedIntermediaryUrl: SolanaChains[chain].trustedSwapForGasUrl
     };
 
 };
@@ -104,8 +105,8 @@ export class SolanaSwapper extends Swapper<
     PublicKey
 > {
 
-    constructor(provider: AnchorProvider, options?: SwapperOptions);
-    constructor(rpcUrl: string, keypair: Keypair, options?: SwapperOptions);
+    constructor(provider: AnchorProvider, options?: SwapperOptions<SolanaSwapData>);
+    constructor(rpcUrl: string, keypair: Keypair, options?: SwapperOptions<SolanaSwapData>);
 
     constructor(providerOrRpcUrl: AnchorProvider | string, optionsOrKeypair?: SolanaSwapperOptions | Keypair, noneOrOptions?: null | SolanaSwapperOptions) {
         let provider: AnchorProvider;

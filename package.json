@@ -1,6 +1,6 @@
 {
   "name": "sollightning-sdk",
-  "version": "10.4.1",
+  "version": "10.4.3",
   "description": "SDK for cross-chain swaps between solana and bitcoin",
   "main": "./dist/index.js",
   "types:": "./dist/index.d.ts",
@@ -28,7 +28,7 @@
     "buffer": "6.0.3",
     "cross-fetch": "3.1.5",
     "crosslightning-base": "6.0.1",
-    "crosslightning-sdk-base": "8.2.1",
+    "crosslightning-sdk-base": "8.2.3",
     "crosslightning-solana": "5.0.19",
     "crypto-browserify": "3.12.0",
     "process": "0.11.10",

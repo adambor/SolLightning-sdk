@@ -126,7 +126,9 @@ export class SolanaSwapper extends Swapper<
 
         const bitcoinRpc = new MempoolBitcoinRpc();
         const btcRelay = new SolanaBtcRelay(provider, bitcoinRpc, options.addresses.btcRelayContract);
-        const swapContract = new SolanaSwapProgram(provider, btcRelay, options.storage?.dataAccount || new LocalStorageManager("solAccounts"), options.addresses.swapContract);
+        const swapContract = new SolanaSwapProgram(provider, btcRelay, options.storage?.dataAccount || new LocalStorageManager("solAccounts"), options.addresses.swapContract, {
+            transactionResendInterval: 1000
+        });
         const chainEvents = new SolanaChainEventsBrowser(provider, swapContract);
 
         options.bitcoinNetwork = options.bitcoinNetwork==null ? BitcoinNetwork.TESTNET : options.bitcoinNetwork;

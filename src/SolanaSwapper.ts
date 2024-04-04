@@ -3,7 +3,13 @@ import {Connection, Keypair, PublicKey} from "@solana/web3.js";
 
 import KeypairWallet from "./wallet/KeypairWallet";
 
-import {SolanaBtcRelay, SolanaSwapData, SolanaSwapProgram, StoredDataAccount} from "crosslightning-solana";
+import {
+    SolanaBtcRelay,
+    SolanaFeeEstimator, SolanaRetryPolicy,
+    SolanaSwapData,
+    SolanaSwapProgram,
+    StoredDataAccount
+} from "crosslightning-solana";
 
 import {
     BinancePriceProvider,
@@ -25,7 +31,9 @@ import {BitcoinNetwork} from "crosslightning-sdk-base/dist/btc/BitcoinNetwork";
 export type SolanaSwapperOptions = SwapperOptions<SolanaSwapData> & {
     storage?: {
         dataAccount?: IStorageManager<StoredDataAccount>
-    }
+    },
+    feeEstimator?: SolanaFeeEstimator,
+    retryPolicy?: SolanaRetryPolicy
 };
 
 export function createSwapperOptions(
@@ -108,7 +116,11 @@ export class SolanaSwapper extends Swapper<
     constructor(provider: AnchorProvider, options?: SwapperOptions<SolanaSwapData>);
     constructor(rpcUrl: string, keypair: Keypair, options?: SwapperOptions<SolanaSwapData>);
 
-    constructor(providerOrRpcUrl: AnchorProvider | string, optionsOrKeypair?: SolanaSwapperOptions | Keypair, noneOrOptions?: null | SolanaSwapperOptions) {
+    constructor(
+        providerOrRpcUrl: AnchorProvider | string,
+        optionsOrKeypair?: SolanaSwapperOptions | Keypair,
+        noneOrOptions?: null | SolanaSwapperOptions
+    ) {
         let provider: AnchorProvider;
         let options: SolanaSwapperOptions;
         if(typeof(providerOrRpcUrl)==="string") {
@@ -126,9 +138,9 @@ export class SolanaSwapper extends Swapper<
 
         const bitcoinRpc = new MempoolBitcoinRpc();
         const btcRelay = new SolanaBtcRelay(provider, bitcoinRpc, options.addresses.btcRelayContract);
-        const swapContract = new SolanaSwapProgram(provider, btcRelay, options.storage?.dataAccount || new LocalStorageManager("solAccounts"), options.addresses.swapContract, {
+        const swapContract = new SolanaSwapProgram(provider, btcRelay, options.storage?.dataAccount || new LocalStorageManager("solAccounts"), options.addresses.swapContract, options.retryPolicy || {
             transactionResendInterval: 1000
-        });
+        }, options.feeEstimator);
         const chainEvents = new SolanaChainEventsBrowser(provider, swapContract);
 
         options.bitcoinNetwork = options.bitcoinNetwork==null ? BitcoinNetwork.TESTNET : options.bitcoinNetwork;

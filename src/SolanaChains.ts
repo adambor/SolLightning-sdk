@@ -66,7 +66,7 @@ export function getCoinsMap(chain:  "DEVNET" | "MAINNET", tokenAddresses?: {WBTC
         [SolanaChains[chain].tokens.BONK || tokenAddresses?.BONK]: {
             binancePair: "BONKUSDC;!BTCUSDC",
             okxPair: null,
-            coinGeckoCoinId: "tether",
+            coinGeckoCoinId: "bonk",
             coinPaprikaCoinId: "bonk-bonk",
             decimals: 5
         }

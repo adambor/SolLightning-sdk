@@ -5,13 +5,14 @@ import KeypairWallet from "./wallet/KeypairWallet";
 
 import {
     SolanaBtcRelay,
-    SolanaFeeEstimator, SolanaRetryPolicy,
+    SolanaFees, SolanaRetryPolicy,
     SolanaSwapData,
     SolanaSwapProgram,
     StoredDataAccount
 } from "crosslightning-solana";
 
 import {
+    IWrapperStorage,
     LocalStorageManager,
     MempoolBitcoinRpc,
     RedundantSwapPrice, RedundantSwapPriceAssets,
@@ -19,7 +20,7 @@ import {
     SwapperOptions
 } from "crosslightning-sdk-base";
 import {getCoinsMap, SolanaChains} from "./SolanaChains";
-import {IStorageManager} from "crosslightning-base";
+import {IStorageManager, StorageObject} from "crosslightning-base";
 import {SolanaChainEventsBrowser} from "crosslightning-solana/dist/solana/events/SolanaChainEventsBrowser";
 import {BitcoinNetwork} from "crosslightning-sdk-base/dist/btc/BitcoinNetwork";
 
@@ -27,7 +28,7 @@ export type SolanaSwapperOptions = SwapperOptions<SolanaSwapData> & {
     storage?: {
         dataAccount?: IStorageManager<StoredDataAccount>
     },
-    feeEstimator?: SolanaFeeEstimator,
+    feeEstimator?: SolanaFees,
     retryPolicy?: SolanaRetryPolicy
 };
 
@@ -36,48 +37,14 @@ export function createSwapperOptions(
     maxFeeDifference?: BN,
     intermediaryUrl?: string | string[],
     tokens?: RedundantSwapPriceAssets,
-    httpTimeouts?: {getTimeout?: number, postTimeout?: number}
-): SwapperOptions<SolanaSwapData> {
-    // const coinsMapOKX = OKXSwapPrice.createCoinsMap(
-    //     SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
-    //     SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
-    //     SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
-    // );
-    // coinsMapOKX[SolanaChains[chain].tokens.WSOL] = {
-    //     pair: "SOL-BTC",
-    //     decimals: 9,
-    //     invert: false
-    // };
-    // const okx = new OKXPriceProvider(
-    //     coinsMapOKX,
-    //     null,
-    //     httpTimeouts?.getTimeout
-    // );
-    //
-    // const coinsMapBinance = BinanceSwapPrice.createCoinsMap(
-    //     SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
-    //     SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
-    //     SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
-    // );
-    // coinsMapBinance[SolanaChains[chain].tokens.WSOL] = {
-    //     pair: "SOLBTC",
-    //     decimals: 9,
-    //     invert: false
-    // };
-    // const binance = new BinancePriceProvider(
-    //     coinsMapBinance,
-    //     null,
-    //     httpTimeouts?.getTimeout
-    // );
-    //
-    // const coinMapSwaps = RedundantSwapPrice.createCoinsMap(
-    //     SolanaChains[chain].tokens.WBTC || tokenAddresses?.WBTC,
-    //     SolanaChains[chain].tokens.USDC || tokenAddresses?.USDC,
-    //     SolanaChains[chain].tokens.USDT || tokenAddresses?.USDT
-    // );
-    // coinMapSwaps[SolanaChains[chain].tokens.WSOL] = 9;
-
-    return {
+    httpTimeouts?: {getTimeout?: number, postTimeout?: number},
+    storageCtors?: {
+        wrapper: (name: string) => IWrapperStorage,
+        storage: <T extends StorageObject>(name: string) => IStorageManager<T>
+    }
+): SolanaSwapperOptions {
+    
+    const returnObj: SolanaSwapperOptions = {
         pricing: RedundantSwapPrice.createFromTokenMap(
             maxFeeDifference || new BN(10000),
             tokens || getCoinsMap(chain),
@@ -96,6 +63,19 @@ export function createSwapperOptions(
         postRequestTimeout: httpTimeouts?.postTimeout,
         defaultTrustedIntermediaryUrl: SolanaChains[chain].trustedSwapForGasUrl
     };
+
+    if(storageCtors!=null) {
+        returnObj.storage = {};
+
+        returnObj.storage.dataAccount = storageCtors.storage("data");
+        returnObj.storage.fromBtc = storageCtors.wrapper("fromBtc");
+        returnObj.storage.fromBtcLn = storageCtors.wrapper("fromBtcLn");
+        returnObj.storage.toBtc = storageCtors.wrapper("toBtc");
+        returnObj.storage.toBtcLn = storageCtors.wrapper("toBtcLn");
+        returnObj.storage.lnForGas = storageCtors.storage("lnForGas");
+    }
+
+    return returnObj;
 
 };
 
@@ -130,7 +110,7 @@ export class SolanaSwapper extends Swapper<
         options.addresses = options.addresses || SolanaChains.DEVNET.addresses;
 
         const bitcoinRpc = new MempoolBitcoinRpc();
-        const btcRelay = new SolanaBtcRelay(provider, bitcoinRpc, options.addresses.btcRelayContract);
+        const btcRelay = new SolanaBtcRelay(provider, bitcoinRpc, options.addresses.btcRelayContract, options.feeEstimator);
         const swapContract = new SolanaSwapProgram(provider, btcRelay, options.storage?.dataAccount || new LocalStorageManager("solAccounts"), options.addresses.swapContract, options.retryPolicy || {
             transactionResendInterval: 1000
         }, options.feeEstimator);

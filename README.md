@@ -114,7 +114,7 @@ await swapper.init();
 #### Swap Solana -> Bitcoin on-chain
 ```typescript
 const _useNetwork: ("DEVNET" | "MAINNET") = "DEVNET"; //"DEVNET" or "MAINNET"
-const _useToken: string = SolanaChains[_useNetwork].tokens.USDC; //Token to swap from
+const _useToken: string = SolanaChains[_useNetwork].tokens.WSOL; //Token to swap from
 const _address: string = "bc1qev3mcx2q57znyk7l8uwwzenke67as6gtc7rhn3"; //Destination bitcoin address
 const _amount: BN = new BN(10000); //Amount of satoshis to send (1 BTC = 100 000 000 satoshis)
 
@@ -144,7 +144,7 @@ if(!result) {
 #### Swap Bitcoin on-chain -> Solana
 ```typescript
 const _useNetwork: ("DEVNET" | "MAINNET") = "DEVNET"; //"DEVNET" or "MAINNET"
-const _useToken: string = SolanaChains[_useNetwork].tokens.USDC; //Token to swap from
+const _useToken: string = SolanaChains[_useNetwork].tokens.WSOL; //Token to swap from
 const _amount: BN = new BN(10000); //Amount of satoshis to receive (1 BTC = 100 000 000 satoshis)
 
 //Create the swap: swapping _amount of satoshis of Bitcoin on-chain to _useToken
@@ -190,7 +190,7 @@ try {
 #### Swap Solana -> Bitcoin lightning network
 ```typescript
 const _useNetwork: ("DEVNET" | "MAINNET") = "DEVNET"; //"DEVNET" or "MAINNET"
-const _useToken: string = SolanaChains[_useNetwork].tokens.USDC; //Token to swap from
+const _useToken: string = SolanaChains[_useNetwork].tokens.WSOL; //Token to swap from
 const _lightningInvoice: string = "lnbc10u1pj2q0g9pp5ejs6m677m39cznpzum7muruvh50ys93ln82p4j9ks2luqm56xxlshp52r2anlhddfa9ex9vpw9gstxujff8a0p8s3pzvua930js0kwfea6scqzzsxqyz5vqsp5073zskc5qfgp7lre0t6s8uexxxey80ax564hsjklfwfjq2ew0ewq9qyyssqvzmgs6f8mvuwgfa9uqxhtza07qem4yfhn9wwlpskccmuwplsqmh8pdy6c42kqdu8p73kky9lsnl40qha5396d8lpgn90y27ltfc5rfqqq59cya"; //Destination lightning network invoice
 
 //Create the swap: swapping _useToken to Bitcoin lightning network, sending to _lightningInvoice (lightning network invoice needs to contain an amount!)
@@ -219,7 +219,7 @@ if(!result) {
 #### Swap Bitcoin lightning network -> Solana
 ```typescript
 const _useNetwork: ("DEVNET" | "MAINNET") = "DEVNET"; //"DEVNET" or "MAINNET"
-const _useToken: string = SolanaChains[_useNetwork].tokens.USDC; //Token to swap from
+const _useToken: string = SolanaChains[_useNetwork].tokens.WSOL; //Token to swap from
 const _amount: BN = new BN(10000); //Amount of satoshis to receive (1 BTC = 100 000 000 satoshis)
 
 //Create the swap: swapping _amount of satoshis from Bitcoin lightning network to _useToken
@@ -302,7 +302,7 @@ if(isLNURL) {
 #### Swap Solana -> Bitcoin lightning network 
 ```typescript
 const _useNetwork: ("DEVNET" | "MAINNET") = "DEVNET"; //"DEVNET" or "MAINNET"
-const _useToken: string = SolanaChains[_useNetwork].tokens.USDC; //Token to swap from
+const _useToken: string = SolanaChains[_useNetwork].tokens.WSOL; //Token to swap from
 const _lnurlOrIdentifier: string = "lnurl1dp68gurn8ghj7ampd3kx2ar0veekzar0wd5xjtnrdakj7tnhv4kxctttdehhwm30d3h82unvwqhkx6rfvdjx2ctvxyesuk0a27"; //Destination LNURL-pay or readable identifier
 const _amount: BN = new BN(10000); //Amount of satoshis to send (1 BTC = 100 000 000 satoshis)
 const _comment: (string | null) = "Hello, Lightning!"; //Optional comment for the payment
@@ -340,7 +340,7 @@ if(!result) {
 #### Swap Bitcoin lightning network -> Solana
 ```typescript
 const _useNetwork: ("DEVNET" | "MAINNET") = "DEVNET"; //"DEVNET" or "MAINNET"
-const _useToken: string = SolanaChains[_useNetwork].tokens.USDC; //Token to swap from
+const _useToken: string = SolanaChains[_useNetwork].tokens.WSOL; //Token to swap from
 const _lnurl: string = "lnurl1dp68gurn8ghj7ampd3kx2ar0veekzar0wd5xjtnrdakj7tnhv4kxctttdehhwm30d3h82unvwqhkx6rfvdjx2ctvxyesuk0a27"; //Destination LNURL-pay or readable identifier
 const _amount: BN = new BN(10000); //Amount of satoshis to withdraw (1 BTC = 100 000 000 satoshis)
 

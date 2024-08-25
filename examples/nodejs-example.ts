@@ -43,7 +43,7 @@ async function payViaLNURL() {
     /// Swap Solana -> Bitcoin lightning (using LNURL) ///
     //////////////////////////////////////////////////////
 
-    const _useToken: string = SolanaChains[_network].tokens.USDC; //Token to swap from
+    const _useToken: string = SolanaChains[_network].tokens.WSOL; //Token to swap from
     const _lnurlOrIdentifier: string = "lnurl1dp68gurn8ghj7ampd3kx2ar0veekzar0wd5xjtnrdakj7tnhv4kxctttdehhwm30d3h82unvwqhkx6rfvdjx2ctvxyesuk0a27"; //Destination LNURL-pay or readable identifier
     const _amount: BN = new BN(1000); //Amount of satoshis to send (1 BTC = 100 000 000 satoshis)
     const _comment: (string | null) = "Hello, Lightning!"; //Optional comment for the payment
@@ -86,7 +86,7 @@ async function payViaLNURL() {
 }
 
 async function receiveLN() {
-    const _useToken: string = SolanaChains[_network].tokens.USDC; //Token to swap from
+    const _useToken: string = SolanaChains[_network].tokens.WSOL; //Token to swap from
     const _amount: BN = new BN(1000); //Amount of satoshis to receive (1 BTC = 100 000 000 satoshis)
 
     //Create the swap: swapping _amount of satoshis from Bitcoin lightning network to _useToken
@@ -124,7 +124,6 @@ async function main() {
     await receiveLN();
 
     await swapper.stop();
-
 }
 
 main();

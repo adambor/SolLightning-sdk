@@ -1,6 +1,6 @@
 {
   "name": "sollightning-sdk",
-  "version": "11.1.0-beta15",
+  "version": "12.0.0",
   "description": "SDK for cross-chain swaps between solana and bitcoin",
   "main": "./dist/index.js",
   "types:": "./dist/index.d.ts",
@@ -22,14 +22,13 @@
   "author": "adambor",
   "license": "ISC",
   "dependencies": {
-    "@types/bn.js": "5.1.5",
-    "bitcoinjs-lib": "6.1.5",
-    "bolt11": "1.4.0",
-    "buffer": "6.0.3",
     "crosslightning-base": "6.0.3",
-    "crosslightning-sdk-base": "9.1.15",
-    "crosslightning-solana": "5.5.0-beta18",
-    "process": "0.11.10",
+    "crosslightning-sdk-base": "10.0.0",
+    "crosslightning-solana": "6.0.0",
+    "process": "0.11.10"
+  },
+  "devDependencies": {
+    "@types/bn.js": "5.1.5",
     "typescript": "4.9.5"
   }
 }

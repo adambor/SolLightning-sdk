@@ -3,7 +3,7 @@ import {
     RedundantSwapPriceAssets
 } from "crosslightning-sdk-base";
 import {createSwapperOptions, SolanaSwapperOptions} from "./SolanaSwapper";
-import {FileSystemStorageManager, FileSystemWrapperStorage} from "crosslightning-sdk-base/dist/fs-storage";
+import {FileSystemStorageManager} from "crosslightning-sdk-base/dist/fs-storage";
 import * as fs from "fs";
 import {StorageObject} from "crosslightning-base";
 
@@ -19,8 +19,12 @@ export function createNodeJSSwapperOptions(
         fs.mkdirSync("storage"+chain);
     } catch (e) {}
 
-    return createSwapperOptions(chain, maxFeeDifference, intermediaryUrl, tokens, httpTimeouts, {
-        wrapper: (name) => new FileSystemWrapperStorage(baseDirectory+"/"+name),
-        storage: <T extends StorageObject>(name) => new FileSystemStorageManager<T>(baseDirectory+"/"+name),
-    });
+    return createSwapperOptions(
+        chain,
+        maxFeeDifference,
+        intermediaryUrl,
+        tokens,
+        httpTimeouts,
+        <T extends StorageObject>(name) => new FileSystemStorageManager<T>(baseDirectory+"/"+name)
+    );
 }
